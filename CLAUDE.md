@@ -589,4 +589,12 @@ Add to home screen via Chrome → "Add to Home Screen" for PWA install.
 ## Testing on tablet and publishing notes:
 - Had some issues testing on tablet as a PWA, in the end opted to host on github pages (I might move to cloudflare at some point) to be able to have the app work as a PWA page thing
 - Also had some issues initialising a github repo for the project, but solved them and eventually hosted the app on a github page: https://jollly7.github.io/wh40k-tracker-app-test/
-- 
+
+
+## v1.3 Project Plan
+
+### Phase Detail
+
+#### Phase 1 - Game, Faction and Detachment reminders per battle phase
+[x] - Create location to store instructions (`src/data/reminders.js`)
+[x] - Add instructions for Genestealers - Biosanctic Broodsurge and Orks - War Horde

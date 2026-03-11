@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Lock, X } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { SECONDARY_MISSION_IMAGES } from '../../data/missionImages';
+import { FACTION_REMINDERS, GENERAL_REMINDERS } from '../../data/reminders';
 
 const ROLE_ACCENT = {
   attacker: {
@@ -334,6 +335,7 @@ function SecondaryCardSlot({ cardName, onDraw, onDiscard }) {
 function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShrunk, onExpand, onCollapse, onActiveClick }) {
   const player      = useGameStore((s) => s.players[playerNum]);
   const round       = useGameStore((s) => s.round);
+  const currentPhase = useGameStore((s) => s.currentPhase);
   const adjustCP    = useGameStore((s) => s.adjustCP);
   const hand        = useGameStore((s) => s.hand[`p${playerNum}`]);
   const drawCard    = useGameStore((s) => s.drawCard);
@@ -389,7 +391,20 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
         <div className="flex-1 overflow-y-auto min-h-0 p-3 flex flex-col gap-4">
 
           {(isCollapsedInactive || isShrunk) ? (
-            <MiniVPTable playerNum={playerNum} currentRound={round} />
+            <>
+              <div className="flex items-center justify-around px-1 py-1.5 bg-surface-raised rounded-panel border border-border-subtle text-sm shrink-0">
+                <div className="flex flex-col items-center gap-0.5 min-w-0">
+                  <span className="text-xs text-text-muted uppercase tracking-wider leading-none">CP</span>
+                  <span className="font-display font-bold text-text-primary tabular-nums leading-none">{player.cp}</span>
+                </div>
+                <div className="w-px h-6 bg-border-subtle shrink-0" />
+                <div className="flex flex-col items-center gap-0.5 min-w-0">
+                  <span className="text-xs text-text-muted uppercase tracking-wider leading-none">VP</span>
+                  <span className="font-display font-bold text-text-primary tabular-nums leading-none">{player.vp.total}</span>
+                </div>
+              </div>
+              <MiniVPTable playerNum={playerNum} currentRound={round} />
+            </>
           ) : (
             <>
               {/* Upper row: CP + VP totals (left) | Secondary cards (right) */}
@@ -397,17 +412,17 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
                 {/* Left column: CP + VP totals */}
                 <div className="flex flex-col gap-4 flex-1 min-w-0">
                   {/* CP section */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 py-1">
                     <div className="flex items-end gap-2">
-                      <span className="text-sm font-semibold text-text-secondary uppercase tracking-wider shrink-0">CP</span>
-                      <span className="font-display text-4xl font-bold text-text-primary tabular-nums leading-none w-10">{player.cp}</span>
+                      <span className="text-base font-semibold text-text-secondary uppercase tracking-wider shrink-0">CP</span>
+                      <span className="font-display text-6xl font-bold text-text-primary tabular-nums leading-none w-14">{player.cp}</span>
                     </div>
                     {showControls && (
                       <div className="flex gap-2 ml-1">
                         <button
                           onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); adjustCP(playerNum, -1); }}
                           disabled={player.cp === 0}
-                          className="w-12 h-12 rounded-panel bg-surface-inset border border-border-subtle
+                          className="w-14 h-14 rounded-panel bg-surface-inset border border-border-subtle
                             hover:bg-surface-panel hover:border-border-strong disabled:opacity-25
                             disabled:cursor-not-allowed text-xl font-bold text-text-primary flex items-center
                             justify-center transition-colors shrink-0"
@@ -417,7 +432,7 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
                         </button>
                         <button
                           onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); adjustCP(playerNum, +1); }}
-                          className="w-12 h-12 rounded-panel bg-surface-inset border border-border-subtle
+                          className="w-14 h-14 rounded-panel bg-surface-inset border border-border-subtle
                             hover:bg-surface-panel hover:border-border-strong text-xl font-bold
                             text-text-primary flex items-center justify-center transition-colors shrink-0"
                           aria-label="Gain CP"
@@ -429,12 +444,12 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
                   </div>
 
                   {/* VP total */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 py-1">
                     <div className="flex items-end gap-2">
-                      <span className="text-sm font-semibold text-text-secondary uppercase tracking-wider">VP</span>
-                      <span className="font-display text-4xl font-bold text-text-primary tabular-nums leading-none">{player.vp.total}</span>
+                      <span className="text-base font-semibold text-text-secondary uppercase tracking-wider">VP</span>
+                      <span className="font-display text-6xl font-bold text-text-primary tabular-nums leading-none">{player.vp.total}</span>
                     </div>
-                    <div className="flex flex-col items-start text-xs text-text-muted tabular-nums leading-tight">
+                    <div className="flex flex-col items-start text-sm text-text-muted tabular-nums leading-tight">
                       <span>{player.vp.primary} Pri</span>
                       <div className="border-t border-border-subtle w-full my-0.5" />
                       <span>{player.vp.secondary} Sec</span>
@@ -463,12 +478,54 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
 
               {/* VP table — full width below */}
               <VPTable playerNum={playerNum} showControls={showControls} currentRound={round} />
+
+              {/* Phase reminders — active player only */}
+              {isActive && (
+                <PhaseReminders
+                  faction={player.faction}
+                  detachment={player.detachment}
+                  phaseIndex={currentPhase}
+                />
+              )}
             </>
           )}
 
         </div>
       </div>
     </>
+  );
+}
+
+function ReminderList({ items }) {
+  return (
+    <ul className="flex flex-col gap-1">
+      {items.map((r, i) => (
+        <li key={i} className="flex items-start gap-1.5 text-sm text-text-secondary leading-snug">
+          <span className="shrink-0 mt-1.5 w-1 h-1 rounded-full bg-text-muted" />
+          {r.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function PhaseReminders({ faction, detachment, phaseIndex }) {
+  const general = GENERAL_REMINDERS.filter((r) => r.phase === phaseIndex);
+  const faction_ = (FACTION_REMINDERS[`${faction}||${detachment}`] ?? []).filter(
+    (r) => r.phase === phaseIndex
+  );
+
+  if (general.length === 0 && faction_.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-text-muted uppercase tracking-wide">Phase Reminders</span>
+      {general.length > 0 && <ReminderList items={general} />}
+      {general.length > 0 && faction_.length > 0 && (
+        <hr className="border-border-subtle" />
+      )}
+      {faction_.length > 0 && <ReminderList items={faction_} />}
+    </div>
   );
 }
 
