@@ -198,10 +198,10 @@ These capture decisions and deviations from original spec — read before touchi
 | v1.5-1 | Quick −1 CP button on inactive player sliver | ✅ Done |
 | v1.5-2 | Header CP/VP legibility improvements | ✅ Done |
 | v1.5-3 | Reminders reorder + separators + content expansion | ✅ Done |
-| v1.5-4 | Challenger card alert banner | ⬜ Not Started |
-| v1.5-5 | End-of-game summary modal | ⬜ Not Started |
+| v1.5-4 | Challenger card alert banner | ⬜ Not Started (deferred to 1.7) |
+| v1.5-5 | End-of-game summary modal | ✅ Done |
 
-**Deferred to v2:** army list import (New Recruit text parsing, PDF data card viewer, unit stats/abilities).
+**added to to v1.6:** army list import (New Recruit .ros text parsing, unit stats/abilities).
 
 ---
 
@@ -387,16 +387,16 @@ Add "Army" as 4th tab. Use `Swords` or `Shield` from Lucide React.
 
 #### Acceptance criteria
 
-- [ ] Army tab appears as 4th tab, accessible from anywhere in the game
-- [ ] Both players' armies shown side-by-side, attacker left / defender right, role accent colours applied
-- [ ] Each unit row shows M, T, SV, W, LD, OC collapsed; invuln in brackets next to SV when present
-- [ ] Tapping a unit expands to show ranged and melee weapon tables (A, BS/WS, S, AP, D, Keywords)
-- [ ] T and S values visually highlighted for quick scanning
-- [ ] Duplicate weapons de-duped within a unit
-- [ ] "No army list loaded" placeholder shown when data absent
-- [ ] Parser script runs with `node scripts/parseRoster.mjs <file.ros>` and prints valid JS to stdout
-- [ ] Layout fits 1280×800 without overflow; unit lists scroll independently
-- [ ] No new npm dependencies
+- [x] Army tab appears as 4th tab, accessible from anywhere in the game
+- [x] Both players' armies shown side-by-side, attacker left / defender right, role accent colours applied
+- [x] Each unit row shows M, T, SV, W, LD, OC collapsed; invuln in brackets next to SV when present
+- [x] Tapping a unit expands to show ranged and melee weapon tables (A, BS/WS, S, AP, D, Keywords)
+- [x] T and S values visually highlighted for quick scanning
+- [x] Duplicate weapons de-duped within a unit
+- [x] "No army list loaded" placeholder shown when data absent
+- [x] Parser script runs with `node scripts/parseRoster.mjs <file.ros>` and prints valid JS to stdout
+- [x] Layout fits 1280×800 without overflow; unit lists scroll independently
+- [x] No new npm dependencies
 
 ---
 
@@ -405,3 +405,26 @@ Add "Army" as 4th tab. Use `Swords` or `Shield` from Lucide React.
 - File upload in setup screen (`.ros` drag-and-drop → auto-parse on device)
 - Wound roll matrix (S vs T pre-computed)
 - Filtering by phase (e.g. show only melee weapons in Fight Phase)
+
+#### v1.6-2 — Roster dropdown + parser improvements
+
+**What:** Each player panel in the Army tab now has a dropdown to select their army list at game time. Parser updated to write files directly and self-register them.
+
+**Parser changes (`scripts/parseRoster.mjs`):**
+- Accepts multiple files: `node scripts/parseRoster.mjs "*.ros"` — glob patterns expanded internally (Windows-safe)
+- Writes output directly to `src/data/rosters/<name>.js` using `export default { label, faction, units }` syntax
+- Auto-updates `src/data/rosters/index.js` — adds the import and registers the key in `ROSTERS`; idempotent (re-running the same file is safe)
+- Hyphenated filenames produce valid camelCase JS identifiers (e.g. `gsc-colosseum.js` → `gscColosseum`)
+- Prints a summary line: `✓ Processed N files`
+
+**Army tab changes:**
+- `src/data/rosters/index.js` — new manually-maintained index file; parser populates it automatically
+- `ArmyTab.jsx` — dropdown per player sourced from `ROSTERS`; selection persisted to `localStorage` (`wh40k-army-selection`) so it survives tab switches and refresh
+- `ArmyPanel.jsx` — faction line now shows detachment from the Zustand store alongside the roster faction, e.g. `T'au Empire — Mont'ka`; no store changes required
+
+**Acceptance criteria:**
+- [x] `node scripts/parseRoster.mjs "*.ros"` processes all `.ros` files and writes rosters + updates index
+- [x] Each player panel has a dropdown listing all available rosters
+- [x] Selecting a roster loads it into that panel immediately; blank option reverts to placeholder
+- [x] Selection persists across tab switches and page refresh
+- [x] Faction and detachment shown beneath player name when a roster is loaded

@@ -1,9 +1,10 @@
-import { BarChart2, List, Users } from 'lucide-react';
+import { BarChart2, List, Users, Swords } from 'lucide-react';
 
 const TABS = [
   { id: 'tracker',  label: 'Tracker',  Icon: BarChart2 },
   { id: 'phases',   label: 'Phases',   Icon: List },
-  { id: 'factions', label: 'Faction Reminders', Icon: Users },
+  { id: 'factions', label: 'Factions', Icon: Users },
+  { id: 'army',     label: 'Army',     Icon: Swords },
 ];
 
 export function TabBar({ activeTab, setActiveTab }) {

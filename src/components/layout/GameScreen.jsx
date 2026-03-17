@@ -6,6 +6,7 @@ import { ObjectivesSidebar } from '../objectives/ObjectivesSidebar';
 import { TrackerTab } from '../tracker/TrackerTab';
 import { PhasesTab } from '../phases/PhasesTab';
 import { FactionsTab } from '../factions/FactionsTab';
+import { ArmyTab } from '../army/ArmyTab';
 import { GameSummaryModal } from '../GameSummaryModal';
 
 export function GameScreen() {
@@ -60,6 +61,9 @@ export function GameScreen() {
                 attackerNum={attackerNum}
                 firstPlayerNum={firstPlayer}
                 secondPlayerNum={secondPlayerNum} />
+            )}
+            {activeTab === 'army' && (
+              <ArmyTab attackerNum={attackerNum} />
             )}
           </div>
 
