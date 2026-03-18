@@ -81,10 +81,37 @@ function AbilityPopup({ ability, onClose }) {
   );
 }
 
+function CompositionAccordion({ composition }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1 text-xs font-semibold tracking-widest uppercase border-l-2 border-violet-400 pl-2 text-violet-300 mb-1 w-full text-left"
+      >
+        <ChevronRight size={12} className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
+        Unit Composition
+      </button>
+      {open && (
+        <ul className="space-y-1 pl-1 mt-1">
+          {composition.map((model, i) => (
+            <li key={i} className="text-xs text-text-secondary">
+              <span className="text-text-primary font-medium">{model.count}x {model.name}</span>
+              {model.equipment.length > 0 && (
+                <span className="text-text-muted">: {model.equipment.join(', ')}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function UnitAccordion({ unit }) {
   const [open, setOpen] = useState(false);
   const [activeAbility, setActiveAbility] = useState(null);
-  const { name, stats, ranged, melee, abilities, keywords } = unit;
+  const { name, stats, ranged, melee, abilities, keywords, composition } = unit;
   const sv = stats.invuln ? `${stats.SV} (${stats.invuln})` : stats.SV;
 
   const hasAbilities = abilities && abilities.length > 0;
@@ -162,6 +189,10 @@ export function UnitAccordion({ unit }) {
                 ))}
               </div>
             </div>
+          )}
+
+          {composition && composition.length > 0 && (
+            <CompositionAccordion composition={composition} />
           )}
         </div>
       )}
