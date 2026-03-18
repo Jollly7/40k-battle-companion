@@ -222,13 +222,24 @@ function parseUnit(sel) {
   const isCharacter = keywords.includes('Character');
 
   // leaderOf: extract bodyguard unit names from the Leader ability description.
-  // Names are wrapped in ^^...^^ markers e.g. **^^Breacher Team^^**
+  // Handles three NewRecruit export formats:
+  //   ^^name^^  — T'au style (caret markers)
+  //   ■ Name    — Grey Knights style (solid-square bullet, line-start)
+  //   - NAME    — GSC style (dash bullet, line-start, may be ALL CAPS)
   const leaderAbility = abilities.find(a => a.name === 'Leader');
   let leaderOf = [];
   if (leaderAbility) {
-    const matches = [...leaderAbility.description.matchAll(/\^\^(.*?)\^\^/g)];
-    const names = matches.map(m => m[1].replace(/\*/g, '').trim()).filter(Boolean);
-    leaderOf = [...new Set(names)].sort();
+    const desc = leaderAbility.description;
+    const caretMatches = [...desc.matchAll(/\^\^(.*?)\^\^/g)];
+    if (caretMatches.length > 0) {
+      const names = caretMatches.map(m => m[1].replace(/\*/g, '').trim()).filter(Boolean);
+      leaderOf = [...new Set(names)].sort();
+    } else {
+      // Fall back to line-start bullet formats: ■ Name  or  - Name
+      const lineMatches = [...desc.matchAll(/^[■\-]\s+(.+)$/gm)];
+      const names = lineMatches.map(m => m[1].trim()).filter(Boolean);
+      leaderOf = [...new Set(names)].sort();
+    }
   }
 
   return { name, stats, ranged, melee, abilities, keywords, composition, isCharacter, leaderOf };

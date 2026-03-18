@@ -24,6 +24,9 @@ dist-ssr
 *.sw?
 *.ros
 Tau Colosseum.json
+Grey Knight Colosseum.json
+Ork Colosseum.json
+GSC Colosseum.json
 
 # archive files
 archive_*.md

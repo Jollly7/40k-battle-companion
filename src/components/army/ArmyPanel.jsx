@@ -2,6 +2,11 @@ import { useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { UnitAccordion } from './UnitAccordion';
 
+/** Normalise for fuzzy matching: lowercase + strip all whitespace. Handles ALL CAPS and missing spaces (e.g. "HANDFLAMERS" vs "Hand Flamers"). */
+function normalizeName(s) {
+  return s.toLowerCase().replace(/\s+/g, '');
+}
+
 export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, pKey, attachments, setAttachments }) {
   const divider = isLeft ? 'border-r border-border-subtle' : '';
   const units = armyData?.units ?? [];
@@ -92,7 +97,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
         validBodyguards = units
           .map((u, idx) => ({ u, idx, displayName: displayNames[idx] }))
           .filter(({ u, idx }) => {
-            if (!(unit.leaderOf ?? []).includes(u.name)) return false;
+            if (!(unit.leaderOf ?? []).some(n => normalizeName(n) === normalizeName(u.name))) return false;
             // Exclude bodyguards already attached to a different character
             const attachedToOther = Object.entries(playerAttachments).some(
               ([cIdxStr, bIdxStr]) => Number(bIdxStr) === idx && cIdxStr !== charIdxStr
