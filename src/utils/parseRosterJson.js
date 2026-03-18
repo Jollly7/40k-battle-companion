@@ -151,11 +151,16 @@ function getModelEquipment(modelSel, modelCount) {
  */
 function getComposition(unitSel) {
   const models = getSelections(unitSel).filter(s => s.type === 'model');
-  if (models.length === 0) return null;
-  return models.map(model => {
-    const count = parseInt(model.number ?? '1', 10);
-    return { name: model.name, count, equipment: getModelEquipment(model, count) };
-  });
+  if (models.length > 0) {
+    return models.map(model => {
+      const count = parseInt(model.number ?? '1', 10);
+      return { name: model.name, count, equipment: getModelEquipment(model, count) };
+    });
+  }
+  // Single-model unit — the selection itself is the model
+  const equipment = getModelEquipment(unitSel, 1);
+  if (equipment.length === 0) return null;
+  return [{ name: unitSel.name, count: 1, equipment }];
 }
 
 /** Parse a single unit selection into the internal unit shape. */

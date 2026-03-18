@@ -406,3 +406,82 @@ Add "Army" as 4th tab. Use `Swords` or `Shield` from Lucide React.
 - [x] Selecting a roster loads it into that panel immediately; blank option reverts to placeholder
 - [x] ~~Selection persists across tab switches and page refresh~~ (superseded by v1.7 — localStorage shape changed)
 - [x] Faction and detachment shown beneath player name when a roster is loaded
+
+---
+
+### v1.7 — NewRecruit .json Roster Import
+
+**What:** Replace the committed-file roster system with client-side JSON import. Players export a `.json` file from NewRecruit and load it directly in the Army tab. Rosters persist to localStorage; no files are committed to the codebase.
+
+---
+
+#### Parser — `src/utils/parseRosterJson.js`
+
+Pure transform function: `parseRosterJson(json)` → internal roster shape. No React, no I/O.
+
+**Input shape handled:** NewRecruit JSON (array-style `forces`/`selections`/`profiles` arrays, `$text` on characteristics). Also handles the older xml2js wrapped style (`{ force: [...] }`, `{ selection: [...] }`) for robustness.
+
+**Extraction logic:**
+- `roster.name` → `label`
+- `force.catalogueName` → `faction` (strips `"Xenos - "`, `"Imperium - "` etc. prefixes)
+- Top-level selection `name === "Detachment"` → first child name → `detachment`
+- Top-level selections `type === "model" || type === "unit"` → `units`
+- Unit stats from `profiles` entry with `typeName === "Unit"`, characteristics by name, `$text` values; T/W/OC coerced to int
+- Invuln: `Abilities` profile whose `name` matches `/^\d+\+\+$/`
+- Ranged/melee weapons: recursive walk of `selections`, collect profiles by `typeName`, de-dupe by name, sum `count` across duplicates
+- Abilities: all `Abilities` profiles (recursive), deduped, excluding invuln saves; `Description` characteristic stored
+- Keywords: unit's own `categories`, names sorted alphabetically
+- Unit composition (see below)
+
+**Multi-model unit fix:** units like Breacher Team have no Unit profile at the top level — it lives inside `type="model"` child selections. Parser falls back to `collectProfiles(sel, 'Unit')[0]` when not found at top level.
+
+**`composition` field:** array of `{ name, count, equipment: string[] }` per model type.
+- Multi-model units (`type="unit"`): iterate `type="model"` children
+- Single-model units (`type="model"` at top level): unit selection itself is the single model entry
+- Equipment per model: direct child upgrade selections; per-model count = `Math.round(upgrade.number / model.number)`; sub-weapons one level deep shown in parens: `"Gun Drone (Twin pulse carbine)"`; count > 1 prefixed: `"3x Plasma rifle"`
+- Returns `null` only if no equipment found (omits section in UI)
+
+---
+
+#### Army tab changes
+
+**`ArmyTab.jsx`:**
+- Removed `ROSTERS` import entirely
+- `wh40k-imported-rosters` localStorage key — array of full roster objects `{ label, faction, detachment, units }`
+- `wh40k-army-selection` localStorage key — `{ attacker: label | null, defender: label | null }`
+- `RosterControls` component per player: hidden `<input type="file" accept=".json">` triggered via `useRef`; reads file with `FileReader`, parses JSON, calls `parseRosterJson`; on success auto-selects the imported roster; inline error on failure
+- Dropdown alongside Import button: lists all imported rosters by label; hidden when no rosters imported yet; both panels share the same pool, independent selections
+- Re-importing a file with the same `label` replaces the existing entry
+
+**`ArmyPanel.jsx`:**
+- `faction` and `detachment` read from roster object directly (not Zustand store)
+- Falls back to store detachment if roster field absent
+
+**`UnitAccordion.jsx`:**
+- `CompositionAccordion` sub-component: nested accordion (collapsed by default) rendered after Keywords
+- Shows each model type as `Nx ModelName: equip1, 2x equip2, Parent (sub-weapon), ...`
+- Only rendered when `unit.composition` is non-null and non-empty
+
+---
+
+#### Acceptance criteria
+
+- [x] "Import .json" button appears in each player's panel
+- [x] Tapping it opens the device file picker filtered to `.json`
+- [x] A valid NewRecruit `.json` loads, parses, and displays immediately; auto-selected in dropdown
+- [x] Dropdown lists all previously imported rosters; selecting switches the panel immediately
+- [x] Imported rosters and selections persist across page refresh and PWA restart
+- [x] Re-importing a file with the same label replaces the existing entry
+- [x] Faction and detachment shown from roster data (not store)
+- [x] Multi-model units (Breacher Team, Crisis Battlesuits) parse all 6 units correctly
+- [x] Unit Composition section shows per-model equipment with correct per-model counts
+- [x] Single-model units also show composition (wargear visible)
+- [x] If parsing fails, inline error shown — app does not crash
+- [x] No committed roster files remain in codebase
+- [x] No new npm dependencies
+
+---
+
+#### Deleted
+- `scripts/parseRoster.mjs`
+- `src/data/rosters/` (all `.js` roster files + `index.js`)
