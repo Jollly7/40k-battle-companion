@@ -23,6 +23,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
 
   const faction = armyData?.faction ?? null;
   const detachment = armyData?.detachment ?? storeDetachment ?? null;
+  const rules = armyData?.rules ?? {};
 
   // Clear this player's attachments when their roster label changes (skip first render)
   const initializedRef = useRef(false);
@@ -88,6 +89,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
           unit={bodyguardUnit}
           displayName={displayNames[bodyguardIdx]}
           leader={{ unit, displayName: displayNames[i], onDetach: () => handleDetach(i) }}
+          rules={rules}
         />
       );
     } else {
@@ -114,6 +116,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
           isCharacter={unit.isCharacter ?? false}
           validBodyguards={validBodyguards}
           onAttach={(bgIdx) => handleAttach(i, bgIdx)}
+          rules={rules}
         />
       );
     }

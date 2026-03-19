@@ -1,7 +1,42 @@
 import { useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
 
-function WeaponTable({ weapons, wsKey }) {
+/** Strip trailing number suffix to find base keyword name: "Rapid Fire 1" → "Rapid Fire" */
+function lookupKeyword(token, rules) {
+  if (!rules) return null;
+  const base = token.replace(/\s+\d+$/, '').trim();
+  return rules[base] ?? rules[token] ?? null;
+}
+
+function KeywordTokens({ keywords, rules, onKeywordClick }) {
+  if (!keywords || keywords === '-') return <span className="text-text-muted">-</span>;
+  const tokens = keywords.split(',').map(t => t.trim()).filter(Boolean);
+  return (
+    <span className="flex flex-wrap gap-1">
+      {tokens.map((token, i) => {
+        const desc = lookupKeyword(token, rules);
+        if (desc) {
+          return (
+            <button
+              key={i}
+              onPointerDown={(e) => { e.preventDefault(); onKeywordClick({ name: token, description: desc }); }}
+              className="text-[10px] rounded px-1 py-0.5 border border-border-subtle text-text-muted hover:text-accent hover:border-accent transition-colors"
+            >
+              {token}
+            </button>
+          );
+        }
+        return (
+          <span key={i} className="text-[10px] rounded px-1 py-0.5 border border-border-subtle text-text-muted">
+            {token}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function WeaponTable({ weapons, wsKey, rules, onKeywordClick }) {
   if (!weapons || weapons.length === 0) return null;
   return (
     <table className="w-full text-xs border-collapse mt-2 table-fixed">
@@ -29,7 +64,9 @@ function WeaponTable({ weapons, wsKey }) {
             </td>
             <td className="py-1 px-1 text-center text-text-secondary tabular-nums">{w.AP}</td>
             <td className="py-1 px-1 text-center text-text-secondary tabular-nums">{w.D}</td>
-            <td className="py-1 pl-2 text-text-muted break-words">{w.keywords}</td>
+            <td className="py-1 pl-2">
+              <KeywordTokens keywords={w.keywords} rules={rules} onKeywordClick={onKeywordClick} />
+            </td>
           </tr>
         ))}
       </tbody>
@@ -133,9 +170,10 @@ function CompositionAccordion({ composition, leaderComposition, leaderName }) {
  * Standard mode: unit + displayName + optional character attach controls
  * Merged mode:   unit = bodyguard, leader = { unit, displayName, onDetach }
  */
-export function UnitAccordion({ unit, displayName, leader, isCharacter, validBodyguards, onAttach }) {
+export function UnitAccordion({ unit, displayName, leader, isCharacter, validBodyguards, onAttach, rules }) {
   const [open, setOpen] = useState(false);
   const [activeAbility, setActiveAbility] = useState(null);
+  const [activeKeyword, setActiveKeyword] = useState(null);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
 
   const isMerged = !!leader;
@@ -272,14 +310,14 @@ export function UnitAccordion({ unit, displayName, leader, isCharacter, validBod
           {combinedRanged.length > 0 && (
             <div>
               <div className="text-xs font-semibold tracking-widest uppercase border-l-2 border-blue-400 pl-2 text-blue-300 mb-1">Ranged</div>
-              <WeaponTable weapons={combinedRanged} wsKey="BS" />
+              <WeaponTable weapons={combinedRanged} wsKey="BS" rules={rules} onKeywordClick={setActiveKeyword} />
             </div>
           )}
 
           {combinedMelee.length > 0 && (
             <div>
               <div className="text-xs font-semibold tracking-widest uppercase border-l-2 border-orange-400 pl-2 text-orange-300 mb-1">Melee</div>
-              <WeaponTable weapons={combinedMelee} wsKey="WS" />
+              <WeaponTable weapons={combinedMelee} wsKey="WS" rules={rules} onKeywordClick={setActiveKeyword} />
             </div>
           )}
 
@@ -334,6 +372,9 @@ export function UnitAccordion({ unit, displayName, leader, isCharacter, validBod
 
       {activeAbility && (
         <AbilityPopup ability={activeAbility} onClose={() => setActiveAbility(null)} />
+      )}
+      {activeKeyword && (
+        <AbilityPopup ability={activeKeyword} onClose={() => setActiveKeyword(null)} />
       )}
     </div>
   );

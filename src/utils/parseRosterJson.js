@@ -7,6 +7,29 @@
  *   - Wrapped style: roster.forces = { force: { catalogueName, selections: { selection: [...] } } }
  */
 
+/**
+ * Recursively collect all rule entries from the JSON tree into a flat name→description map.
+ * Dedupes by name (first occurrence wins).
+ */
+function collectRules(obj, acc = {}) {
+  if (!obj || typeof obj !== 'object') return acc;
+  if (Array.isArray(obj)) {
+    for (const item of obj) collectRules(item, acc);
+    return acc;
+  }
+  if (Array.isArray(obj.rules)) {
+    for (const rule of obj.rules) {
+      const name = rule.name?.trim();
+      const desc = rule.description ?? '';
+      if (name && !acc[name]) acc[name] = desc;
+    }
+  }
+  for (const val of Object.values(obj)) {
+    if (val && typeof val === 'object') collectRules(val, acc);
+  }
+  return acc;
+}
+
 /** Coerce a string to int if it looks like a plain integer, otherwise return as-is. */
 function coerce(val) {
   if (val === null || val === undefined) return null;
@@ -283,5 +306,7 @@ export function parseRosterJson(json) {
     .map(parseUnit)
     .filter(Boolean);
 
-  return { label, faction, detachment, units };
+  const rules = collectRules(json);
+
+  return { label, faction, detachment, units, rules };
 }
