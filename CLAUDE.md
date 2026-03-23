@@ -8,8 +8,8 @@ Victory Points, Objectives, turn phases, and faction reminders.
 
 No server, no login, no app store. Runs entirely in the browser, works offline.
 
-Deployed via GitHub Pages: https://jollly7.github.io/wh40k-tracker-app-test/
-Repo: `wh40k-battle-tracker` under username `Jollly7` — CI/CD via GitHub Actions.
+Deployed via Cloudflare Pages: https://40k-battle-companion.pages.dev
+Repo: `40k-battle-companion` under username `Jollly7` — CI/CD via Cloudflare Pages (connected to GitHub repo, replaces GitHub Actions).
 
 ---
 
@@ -23,7 +23,9 @@ Repo: `wh40k-battle-tracker` under username `Jollly7` — CI/CD via GitHub Actio
 | Persistence | localStorage (`zustand/middleware` persist, key `wh40k-game-state` v1) |
 | PWA | vite-plugin-pwa |
 | Icons/UI | Lucide React |
-| Charting | Recharts (added v1.5 — end-of-game summary line chart) |
+| Charting | Recharts (end-of-game summary line chart) |
+| Backend | Cloudflare Pages Functions (`functions/api/rosters.js`) |
+| Storage | Cloudflare KV (namespace: `40K_ROSTERS`, bound as `ROSTERS`) |
 
 > Do not introduce additional libraries without explaining why and getting confirmation.
 
@@ -51,6 +53,7 @@ src/
     phases/        # Turn phase checklist
     timer/         # Round timer (lives in header)
     factions/      # Faction/detachment reminder panels
+    army/          # Army list tab (ArmyTab.jsx, ArmyPanel.jsx, UnitAccordion.jsx)
   store/
     gameStore.js   # Zustand store — single source of truth
   data/
@@ -119,7 +122,7 @@ Each round has two Player Turns (Player 1 then Player 2), each with 5 phases:
 
 ## What NOT to Do
 
-- No backend, database, or authentication — local only
+- No authentication — app is personal/local-first. Cloudflare KV is the only backend, used exclusively for roster sync across devices.
 - Do not enforce game rules strictly — track and remind, never block
 - Do not auto-install npm packages without explaining the tradeoff
 - Do not create deeply nested component trees
@@ -185,6 +188,8 @@ These capture decisions and deviations from original spec — read before touchi
 | v1.5 | End-of-game modal, CP/VP legibility, reminders reorder, inactive −1 CP | ✅ Done |
 | v1.6 | Army list reference tab (UnitAccordion, weapon tables, abilities) | ✅ Done |
 | v1.7 | .json roster import (NewRecruit, client-side parse, localStorage) | ✅ Done |
+| v1.8.1 | Cloudflare migration + KV roster sync | ✅ Done |
+| v1.8.2 | Mobile layout (responsive Army tab, portrait, player toggle) | ⬜ Planned |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -194,156 +199,15 @@ These capture decisions and deviations from original spec — read before touchi
 
 ## Current Progress
 
-**Last updated:** 18/03/2026
+**Last updated:** 21/03/2026
 
 **Status:** v1.7 shipped — NewRecruit .json roster import, committed rosters removed.
 
 ---
 
-## v1.5 Project Plan
-
-| Phase | Feature | Status |
-|-------|---------|--------|
-| v1.5-1 | Quick −1 CP button on inactive player sliver | ✅ Done |
-| v1.5-2 | Header CP/VP legibility improvements | ✅ Done |
-| v1.5-3 | Reminders reorder + separators + content expansion | ✅ Done |
-| v1.5-4 | Challenger card alert banner | ⬜ Not Started (deferred to 1.7) |
-| v1.5-5 | End-of-game summary modal | ✅ Done |
-
-**added to to v1.6:** army list import (New Recruit .ros text parsing, unit stats/abilities).
-
----
-
-### v1.5 Phase Detail
-
-#### v1.5-1 — Quick −1 CP on inactive player sliver
-
-**What:** A single `−1 CP` button on the collapsed/inactive player panel so the defending player can spend a stratagem CP without expanding their panel.
-
-**Scope:** Small change to the inactive sliver layout in `TrackerTab.jsx`. Reuses `adjustCP` from the store. Must use `e.stopPropagation()` to avoid triggering panel expand.
-
-**Acceptance criteria:**
-- [x] Inactive sliver shows a `−1 CP` button at all times during the game
-- [x] Tapping it decrements that player's CP (min 0), logs the action, and snapshots for undo
-- [x] Does not expand the inactive panel (had to add e.stopPropagation)
-- [x] Button meets 48×48px tap target minimum
-
----
-
-#### v1.5-2 — Header CP/VP legibility
-
-**What:** Make both players' CP and VP numbers larger and easier to read at a glance in the header.
-
-**Scope:** Layout/typography tweak to `Header.jsx` only. No store changes. Test at 1280×800 in Chrome DevTools.
-
-**Acceptance criteria:**
-- [x] CP and VP values are visibly larger than surrounding header text
-- [x] Player identity is unambiguous at arm's length (role colour preserved)
-- [x] Header still fits within 1280px without wrapping or overflow
-
----
-
-#### v1.5-3 — Reminders reorder + separators + content expansion
-
-**What:** Reorder reminder display to faction → detachment → general (currently general-first). Add a visual separator between non-empty groups. Expand reminder content for priority factions.
-
-**Surfaces:** Both `PhaseReminders` in `TrackerTab` (current phase only) and `FactionsTab` (all phases grouped). The reorder and separators apply to both.
-
-**Scope:** Reorder is a small change in `PhaseReminders` and `FactionsTab`. Separators are minor layout additions. Content expansion is pure data work in `reminders.js` — no component changes.
-
-**Priority factions for content:** Genestealer Cults, Orks, Grey Knights, T'au Empire.
-
-**Acceptance criteria:**
-- [x] Reminder groups render in order: faction → detachment → general on both surfaces
-- [x] A visual separator (horizontal rule or equivalent) appears between each non-empty group
-- [x] Empty groups are skipped — no orphan separators
-- [x] At least 4 faction/detachment combinations have meaningfully populated reminders
-
----
-
-#### v1.5-4 — Challenger card alert (deferred to v1.7)
-
-**What:** A banner that appears on a player's panel when they are 6+ VP behind at the start of a battle round, reminding them they may draw a Challenger card.
-
-**Scope:** Derived value only — no new store state. Computed from `vp.total` diff at render time. Banner rendered in `PlayerTrackerPanel`. Only shown at Command Phase (phase index 0) and only when the game is not over.
-
-**Acceptance criteria:**
-- [ ] Banner appears on the trailing player's panel when VP deficit ≥ 6
-- [ ] Only visible during Command Phase (phase index 0)
-- [ ] Disappears automatically if deficit drops below 6
-- [ ] Does not appear when `gameOver: true`
-- [ ] Copy is clear, e.g. "6+ VP behind — you may draw a Challenger card"
-
----
-
-#### v1.5-5 — End-of-game summary modal
-
-**What:** When `gameOver: true`, a modal overlays the game screen with: winner banner, VP breakdown table by round, a line chart of cumulative VP per round, total game time, and per-player time.
-
-**New dependency:** `recharts` — install with `npm install recharts`. Used only in this modal.
-
-**Scope:** New `GameSummaryModal` component. All data from existing store state — no new store fields required. Triggered by `gameOver` flag. Dismissible so the player can still review the tracker underneath. Re-openable after dismissal.
-
-**Chart:** Line chart (Recharts `LineChart`) showing cumulative VP total per round for both players. Lines coloured by role (Attacker = red, Defender = green), consistent with `ROLE_ACCENT`.
-
-**Acceptance criteria:**
-- [x] Modal appears automatically when `gameOver` becomes `true`
-- [x] Winner banner shows player name, role, and final VP totals; role accent colour applied
-- [x] VP table shows Primary / Sec 1 / Sec 2 per round for both players, with a totals row
-- [x] Line chart shows cumulative VP per round (rounds 1–5 on x-axis), both players, role colours
-- [x] Shows total game time and per-player elapsed time (formatted MM:SS)
-- [x] Dismiss button closes the modal (local `useState` in modal or parent)
-- [x] A "View Summary" button appears in the header after game over to re-open the modal
-- [x] Modal fits within 1280×800 viewport without internal scrolling
-
-
 ### v1.6 — Army List Reference Tab
 
-**Scope:** Larger release. New 4th "Army" tab displaying both players' parsed army lists side-by-side.
-
----
-
-#### Data shape — `src/data/armyLists.js`
-```js
-export const ARMY_LISTS = {
-  p1: {
-    label: "Colosseum",       // roster name from <roster name="...">
-    faction: "T'au Empire",
-    units: [
-      {
-        name: "Cadre Fireblade",
-        stats: { M: "6\"", T: 3, SV: "4+", invuln: null, W: 3, LD: "7+", OC: 1 },
-        ranged: [
-          { name: "Fireblade pulse rifle", A: 1, BS: "4+", S: 5, AP: 0, D: 2, keywords: "Rapid Fire 1" },
-        ],
-        melee: [
-          { name: "Close combat weapon", A: 3, WS: "5+", S: 3, AP: 0, D: 1, keywords: "-" },
-        ],
-      },
-    ]
-  },
-  p2: { /* same shape */ }
-}
-```
-
----
-
-#### New files
-
-- `src/data/armyLists.js` — static output, manually populated pre-game
-- `src/components/army/ArmyTab.jsx` — tab root, side-by-side layout
-- `src/components/army/ArmyPanel.jsx` — one player's unit list
-- `src/components/army/UnitAccordion.jsx` — single unit row, expand/collapse
-
----
-
-#### Layout
-
-Mirrors the existing tab layout pattern. Two panels, `attackerNum` left / `defenderNum` right, role accent colours applied via `ROLE_ACCENT` (same pattern as `TrackerTab`, `PhasesTab`, `FactionsTab`). Receives `attackerNum`/`defenderNum` props from `GameScreen`.
-
-If `ARMY_LISTS[pKey]` is undefined or empty, `ArmyPanel` shows a muted placeholder: "No army list loaded".
-
----
+New 4th "Army" tab (`ArmyTab.jsx`, `ArmyPanel.jsx`, `UnitAccordion.jsx`) displaying both players' parsed army lists side-by-side. Attacker left / defender right; role accent colours via `ROLE_ACCENT` (same pattern as other tabs). Receives `attackerNum`/`defenderNum` props from `GameScreen`.
 
 #### UnitAccordion
 
@@ -366,57 +230,20 @@ If `ARMY_LISTS[pKey]` is undefined or empty, `ArmyPanel` shows a muted placehold
 
 - S value highlighted (key value when this unit is shooting)
 - Table omitted entirely if unit has no weapons of that type
-- Keywords truncate with ellipsis on overflow (v1 — no tap-to-expand needed)
+- Keywords truncate with ellipsis on overflow
 
----
-
-#### Tab bar
-
-Add "Army" as 4th tab. Use `Swords` or `Shield` from Lucide React.
-
----
-
-#### Acceptance criteria
-
-- [x] Army tab appears as 4th tab, accessible from anywhere in the game
-- [x] Both players' armies shown side-by-side, attacker left / defender right, role accent colours applied
-- [x] Each unit row shows M, T, SV, W, LD, OC collapsed; invuln in brackets next to SV when present
-- [x] Tapping a unit expands to show ranged and melee weapon tables (A, BS/WS, S, AP, D, Keywords)
-- [x] T and S values visually highlighted for quick scanning
-- [x] Duplicate weapons de-duped within a unit
-- [x] "No army list loaded" placeholder shown when data absent
-- [x] Layout fits 1280×800 without overflow; unit lists scroll independently
-- [x] No new npm dependencies
-
----
+"No army list loaded" placeholder shown when data absent. Unit lists scroll independently.
 
 #### Deferred to v2/v3
 
-- File upload in setup screen (`.ros` drag-and-drop → auto-parse on device)
 - Wound roll matrix (S vs T pre-computed)
 - Filtering by phase (e.g. show only melee weapons in Fight Phase)
-
-#### v1.6-2 — Roster dropdown + parser improvements
-
-**What:** Each player panel in the Army tab now has a dropdown to select their army list at game time. *(Superseded by v1.7 — dropdown replaced with "Import .json" button; committed roster files removed.)*
-
-**Army tab changes:**
-- `ArmyTab.jsx` — dropdown per player; selection persisted to `localStorage` (`wh40k-army-selection`) so it survives tab switches and refresh
-- `ArmyPanel.jsx` — faction line now shows detachment from the Zustand store alongside the roster faction, e.g. `T'au Empire — Mont'ka`; no store changes required
-
-**Acceptance criteria:**
-- [x] Each player panel has a dropdown listing all available rosters
-- [x] Selecting a roster loads it into that panel immediately; blank option reverts to placeholder
-- [x] ~~Selection persists across tab switches and page refresh~~ (superseded by v1.7 — localStorage shape changed)
-- [x] Faction and detachment shown beneath player name when a roster is loaded
 
 ---
 
 ### v1.7 — NewRecruit .json Roster Import
 
-**What:** Replace the committed-file roster system with client-side JSON import. Players export a `.json` file from NewRecruit and load it directly in the Army tab. Rosters persist to localStorage; no files are committed to the codebase.
-
----
+Replaced committed roster files with client-side JSON import. Players export a `.json` from NewRecruit and load it in the Army tab. Rosters persist to localStorage; no roster files are committed to the codebase.
 
 #### Parser — `src/utils/parseRosterJson.js`
 
@@ -449,7 +276,6 @@ Pure transform function: `parseRosterJson(json)` → internal roster shape. No R
 #### Army tab changes
 
 **`ArmyTab.jsx`:**
-- Removed `ROSTERS` import entirely
 - `wh40k-imported-rosters` localStorage key — array of full roster objects `{ label, faction, detachment, units }`
 - `wh40k-army-selection` localStorage key — `{ attacker: label | null, defender: label | null }`
 - `RosterControls` component per player: hidden `<input type="file" accept=".json">` triggered via `useRef`; reads file with `FileReader`, parses JSON, calls `parseRosterJson`; on success auto-selects the imported roster; inline error on failure
@@ -467,24 +293,43 @@ Pure transform function: `parseRosterJson(json)` → internal roster shape. No R
 
 ---
 
-#### Acceptance criteria
-
-- [x] "Import .json" button appears in each player's panel
-- [x] Tapping it opens the device file picker filtered to `.json`
-- [x] A valid NewRecruit `.json` loads, parses, and displays immediately; auto-selected in dropdown
-- [x] Dropdown lists all previously imported rosters; selecting switches the panel immediately
-- [x] Imported rosters and selections persist across page refresh and PWA restart
-- [x] Re-importing a file with the same label replaces the existing entry
-- [x] Faction and detachment shown from roster data (not store)
-- [x] Multi-model units (Breacher Team, Crisis Battlesuits) parse all 6 units correctly
-- [x] Unit Composition section shows per-model equipment with correct per-model counts
-- [x] Single-model units also show composition (wargear visible)
-- [x] If parsing fails, inline error shown — app does not crash
-- [x] No committed roster files remain in codebase
-- [x] No new npm dependencies
+#### Deleted
+- `scripts/parseRoster.mjs`
+- `src/data/armyLists.js` (replaced by localStorage import)
+- `src/data/rosters/` (all `.js` roster files + `index.js`)
 
 ---
 
-#### Deleted
-- `scripts/parseRoster.mjs`
-- `src/data/rosters/` (all `.js` roster files + `index.js`)
+### v1.8.1 — Cloudflare Migration + KV Roster Sync
+
+#### Goals
+- Move hosting from GitHub Pages to Cloudflare Pages
+- Add a colocated Pages Function for roster read/write
+- Roster import auto-pushes to KV; Army tab reads from KV on load
+- Remove old GitHub Pages base path from vite.config.js
+
+#### Architecture
+- `functions/api/rosters.js` — Cloudflare Pages Function, handles GET and POST ✅ Done
+- KV namespace: `40K_ROSTERS`, bound as `ROSTERS` in the Cloudflare Pages dashboard
+- KV key: `"all_rosters"` — single JSON array of all roster objects
+- Roster upsert logic: replace existing entry with matching `label`, otherwise append
+
+#### API contract
+- `GET /api/rosters` — returns `{ rosters: [...] }` (array of `{ label, faction, detachment, units }`)
+- `POST /api/rosters` — body: `{ roster: { label, faction, detachment, units } }` — upserts by label, returns `{ ok: true }`
+
+#### Client-side changes (ArmyTab.jsx) ✅ Done
+- On mount: fetch `GET /api/rosters`, merge with localStorage (KV is source of truth; localStorage retained as offline fallback)
+- After successful local import: POST the new roster to `/api/rosters`
+- If KV fetch fails: fall back silently to localStorage and show a subtle "offline" indicator
+- `syncing` state disables import button and shows "Syncing…" while mount fetch is in progress
+- `offline` badge (`● offline`) shown in controls area when KV fetch fails
+- `syncError` message shown inline when POST fails; clears on next successful POST
+
+#### vite.config.js ✅ Done
+- Remove the `base` config option entirely — Cloudflare Pages serves from root `/`
+
+#### Key constraints
+- No authentication — KV is effectively public to anyone with the URL; acceptable for a personal app
+- Do not remove localStorage persistence — it remains the offline fallback
+- Pages Function must set CORS headers: `Access-Control-Allow-Origin: *`

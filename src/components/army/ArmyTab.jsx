@@ -35,7 +35,7 @@ function saveAttachments(obj) {
   localStorage.setItem(LS_ATTACHMENTS_KEY, JSON.stringify(obj));
 }
 
-function RosterControls({ rosters, selectedLabel, onSelect, onImport }) {
+function RosterControls({ rosters, selectedLabel, onSelect, onImport, syncing, offline, syncError }) {
   const inputRef = useRef(null);
   const [error, setError] = useState(null);
 
@@ -81,12 +81,15 @@ function RosterControls({ rosters, selectedLabel, onSelect, onImport }) {
         </select>
       )}
       <button
-        onPointerDown={(e) => { e.preventDefault(); inputRef.current?.click(); }}
-        className="shrink-0 px-3 h-7 text-xs rounded-panel bg-surface-inset border border-border-subtle text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
+        disabled={syncing}
+        onPointerDown={(e) => { e.preventDefault(); if (!syncing) inputRef.current?.click(); }}
+        className="shrink-0 px-3 h-7 text-xs rounded-panel bg-surface-inset border border-border-subtle text-text-secondary hover:text-text-primary hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Import .json
+        {syncing ? 'Syncing…' : 'Import .json'}
       </button>
+      {offline && <span className="shrink-0 text-xs text-text-secondary">● offline</span>}
       {error && <span className="text-xs text-danger truncate">{error}</span>}
+      {syncError && !error && <span className="text-xs text-text-secondary truncate">{syncError}</span>}
     </div>
   );
 }
@@ -102,6 +105,28 @@ export function ArmyTab({ attackerNum }) {
     return { attacker: saved.attacker ?? null, defender: saved.defender ?? null };
   });
   const [attachments, setAttachments] = useState(() => loadAttachments());
+  const [syncing, setSyncing] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [syncError, setSyncError] = useState(null);
+
+  // On mount: fetch rosters from KV; fall back to localStorage on failure
+  useEffect(() => {
+    setSyncing(true);
+    fetch('/api/rosters')
+      .then((res) => {
+        if (!res.ok) throw new Error('non-200');
+        return res.json();
+      })
+      .then(({ rosters: kvRosters }) => {
+        setRosters(kvRosters);
+        saveImportedRosters(kvRosters);
+        setOffline(false);
+      })
+      .catch(() => {
+        setOffline(true);
+      })
+      .finally(() => setSyncing(false));
+  }, []);
 
   function updateAttachments(updater) {
     setAttachments(prev => {
@@ -129,6 +154,7 @@ export function ArmyTab({ attackerNum }) {
   }
 
   function handleImport(playerKey, roster) {
+    // Save locally and update state immediately — local-first, don't block UI
     setRosters(prev => {
       const updated = prev.filter(r => r.label !== roster.label);
       const next = [...updated, roster];
@@ -140,6 +166,20 @@ export function ArmyTab({ attackerNum }) {
       saveSelection(next);
       return next;
     });
+    // Background POST to KV
+    fetch('/api/rosters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ roster }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('non-200');
+        setOffline(false);
+        setSyncError(null);
+      })
+      .catch(() => {
+        setSyncError('Sync failed — roster saved locally only');
+      });
   }
 
   function getRoster(label) {
@@ -166,6 +206,9 @@ export function ArmyTab({ attackerNum }) {
             selectedLabel={selection.attacker}
             onSelect={(label) => handleSelect('attacker', label)}
             onImport={(r) => handleImport('attacker', r)}
+            syncing={syncing}
+            offline={offline}
+            syncError={syncError}
           />
         }
       />
@@ -183,6 +226,9 @@ export function ArmyTab({ attackerNum }) {
             selectedLabel={selection.defender}
             onSelect={(label) => handleSelect('defender', label)}
             onImport={(r) => handleImport('defender', r)}
+            syncing={syncing}
+            offline={offline}
+            syncError={syncError}
           />
         }
       />
