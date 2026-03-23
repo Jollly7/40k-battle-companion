@@ -16,17 +16,17 @@ function DeviceModeModal({ onSelect }) {
         <div className="flex flex-col gap-3">
           <button
             onClick={() => onSelect('army')}
-            className="flex flex-col items-start gap-1.5 p-4 rounded-panel border border-border-subtle bg-surface-inset hover:border-accent text-left transition-colors"
+            className="flex flex-col items-start gap-1.5 py-3 px-4 rounded-panel border border-border-subtle bg-surface-inset hover:border-accent text-left transition-colors min-h-[48px]"
           >
-            <span className="font-semibold text-text-primary">Army List</span>
-            <span className="text-xs text-text-secondary">View army rosters and phase reminders</span>
+            <span className="font-semibold text-text-primary">Army Tracker</span>
+            <span className="text-sm text-chrome">Track unit stats and reminders</span>
           </button>
           <button
             onClick={() => onSelect('game')}
-            className="flex flex-col items-start gap-1.5 p-4 rounded-panel border border-border-subtle bg-surface-inset hover:border-accent text-left transition-colors"
+            className="flex flex-col items-start gap-1.5 py-3 px-4 rounded-panel border border-border-subtle bg-surface-inset hover:border-accent text-left transition-colors min-h-[48px]"
           >
-            <span className="font-semibold text-text-primary">Game Setup</span>
-            <span className="text-xs text-text-secondary">Run a full game with CP/VP tracking</span>
+            <span className="font-semibold text-text-primary">Battle Tracker</span>
+            <span className="text-sm text-chrome">Track CP/VP and missions</span>
           </button>
         </div>
       </div>
@@ -58,7 +58,7 @@ function App() {
       return <GameScreen initialTab="army" onShowModeModal={openModeModal} />;
     }
     // Game mode: normal flow
-    if (!gameStarted) return <SetupScreen />;
+    if (!gameStarted) return <SetupScreen onShowModeModal={openModeModal} />;
     if (!battleBegun) return <PreBattleScreen />;
     return <GameScreen onShowModeModal={openModeModal} />;
   }

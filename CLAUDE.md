@@ -190,6 +190,7 @@ These capture decisions and deviations from original spec — read before touchi
 | v1.7 | .json roster import (NewRecruit, client-side parse, localStorage) | ✅ Done |
 | v1.8.1 | Cloudflare migration + KV roster sync | ✅ Done |
 | v1.8.2 | Mobile layout (responsive Army tab, portrait, player toggle) | ✅ Done |
+| v1.8.3 | Mobile layout — Tracker, Factions, Setup screen fixes | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -199,9 +200,9 @@ These capture decisions and deviations from original spec — read before touchi
 
 ## Current Progress
 
-**Last updated:** 21/03/2026
+**Last updated:** 23/03/2026
 
-**Status:** v1.7 shipped — NewRecruit .json roster import, committed rosters removed.
+**Status:** v1.8.3 shipped — mobile layout for Tracker and Factions tabs, Setup screen mobile fix.
 
 ---
 
@@ -367,3 +368,39 @@ Pure transform function: `parseRosterJson(json)` → internal roster shape. No R
 - `attackerFaction` and `defenderFaction` read from Zustand store for army name fallback
 - Roster import controls (via `importButton` prop) remain inside `ArmyPanel` header — available on mobile per-panel
 - `RosterControls` and KV sync behaviour unchanged from v1.8.1
+
+---
+
+### v1.8.3 — Mobile Layout: Tracker, Factions, Setup Screen
+
+#### TrackerTab mobile layout (≤768px)
+- Desktop two-panel layout wrapped in `hidden md:flex` — unchanged
+- `flex flex-col md:hidden` mobile branch added below
+- Player toggle bar (`shrink-0 h-12`) at top; two `flex-1 h-12` buttons labelled `P{num} · {name}`
+- Active button uses role accent (`text-danger` / `text-success`) with `border-b-2 border-current`; inactive is `text-chrome`
+- `mobileActivePlayer` state (`'first'` | `'second'`) initialised from store's `activePlayer`; synced via `useEffect` on `activePlayer` change (follows turn advances automatically); also manually toggleable
+- Both `PlayerTrackerPanel` components always mounted; CSS (`h-full` / `hidden`) controls visibility — no state loss on toggle
+- Mobile panels receive `isActive={true}`, `isExpanded={false}`, `isShrunk={false}` — always render full view; sliver/collapsed behaviour is desktop-only
+
+#### FactionsTab mobile layout (≤768px)
+- Same pattern as TrackerTab
+- Desktop layout wrapped in `hidden md:flex`
+- Mobile branch: toggle bar + single `FactionColumn` panel
+- Toggle labels: `P{num} · {faction ?? playerName}`
+- `mobileActivePlayer` state (`'first'` | `'second'`) defaults to `'first'`; manually toggleable (no auto-follow — factions don't change during play)
+- Both `FactionColumn` components always mounted; `isLeft={false}` on mobile (no right border)
+- Added `useState` import to `FactionsTab.jsx`
+
+#### DeviceModeModal (App.jsx)
+- Added `min-h-[48px]` to both choice buttons — ensures 48px tap target on portrait mobile
+- Existing `mx-4 max-w-sm` already handles correct sizing on ~390px screens
+- Mode labels updated: `'army'` → **"Army Tracker"** / `'game'` → **"Battle Tracker"**
+- Descriptions updated; switched from `text-xs text-text-secondary` to `text-sm text-chrome`
+- Button padding changed to `py-3 px-4` (height grows to fit content)
+
+#### SetupScreen (SetupScreen.jsx)
+- Player columns changed from `flex` to `flex flex-col md:flex-row` — stacks vertically on mobile portrait, side-by-side on ≥768px
+- Existing `p-4` outer padding and `flex-wrap` on mission fields already adequate for mobile
+- Accepts `onShowModeModal` prop; renders `SlidersHorizontal` icon button (`absolute top-4 right-4`, `w-10 h-10 rounded-full`) when prop is provided
+- Outer wrapper has `relative` for absolute positioning
+- `App.jsx` passes `openModeModal` to `<SetupScreen>` (same callback already used by GameScreen/TabBar)

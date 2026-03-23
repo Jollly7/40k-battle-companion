@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { GENERAL_REMINDERS, FACTION_REMINDERS, DETACHMENT_REMINDERS } from '../../data/reminders';
@@ -88,10 +89,61 @@ function FactionColumn({ playerNum, isAttacker, isLeft }) {
 }
 
 export function FactionsTab({ firstPlayerNum, secondPlayerNum, attackerNum }) {
+  const firstName    = useGameStore((s) => s.players[firstPlayerNum].name);
+  const secondName   = useGameStore((s) => s.players[secondPlayerNum].name);
+  const firstFaction  = useGameStore((s) => s.players[firstPlayerNum].faction);
+  const secondFaction = useGameStore((s) => s.players[secondPlayerNum].faction);
+  const [mobileActivePlayer, setMobileActivePlayer] = useState('first');
+
+  const firstIsAttacker  = firstPlayerNum === attackerNum;
+  const firstAccentText  = firstIsAttacker ? 'text-danger' : 'text-success';
+  const secondAccentText = firstIsAttacker ? 'text-success' : 'text-danger';
+
+  const firstLabel  = `P${firstPlayerNum} · ${firstFaction ?? firstName}`;
+  const secondLabel = `P${secondPlayerNum} · ${secondFaction ?? secondName}`;
+
   return (
-    <div className="h-full flex overflow-hidden">
-      <FactionColumn playerNum={firstPlayerNum} isAttacker={firstPlayerNum === attackerNum} isLeft />
-      <FactionColumn playerNum={secondPlayerNum} isAttacker={secondPlayerNum === attackerNum} isLeft={false} />
-    </div>
+    <>
+      {/* Desktop layout */}
+      <div className="hidden md:flex h-full overflow-hidden">
+        <FactionColumn playerNum={firstPlayerNum} isAttacker={firstIsAttacker} isLeft />
+        <FactionColumn playerNum={secondPlayerNum} isAttacker={!firstIsAttacker} isLeft={false} />
+      </div>
+
+      {/* Mobile layout */}
+      <div className="flex flex-col md:hidden h-full overflow-hidden">
+        {/* Player toggle bar */}
+        <div className="shrink-0 h-12 flex border-b border-border-subtle bg-surface-panel">
+          <button
+            onPointerDown={(e) => { e.preventDefault(); setMobileActivePlayer('first'); }}
+            className={`flex-1 h-12 text-sm font-medium transition-colors
+              ${mobileActivePlayer === 'first'
+                ? `${firstAccentText} border-b-2 border-current`
+                : 'text-chrome'}`}
+          >
+            {firstLabel}
+          </button>
+          <button
+            onPointerDown={(e) => { e.preventDefault(); setMobileActivePlayer('second'); }}
+            className={`flex-1 h-12 text-sm font-medium transition-colors
+              ${mobileActivePlayer === 'second'
+                ? `${secondAccentText} border-b-2 border-current`
+                : 'text-chrome'}`}
+          >
+            {secondLabel}
+          </button>
+        </div>
+
+        {/* Both panels always mounted; CSS controls visibility */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className={mobileActivePlayer === 'first' ? 'h-full' : 'hidden'}>
+            <FactionColumn playerNum={firstPlayerNum} isAttacker={firstIsAttacker} isLeft={false} />
+          </div>
+          <div className={mobileActivePlayer === 'second' ? 'h-full' : 'hidden'}>
+            <FactionColumn playerNum={secondPlayerNum} isAttacker={!firstIsAttacker} isLeft={false} />
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

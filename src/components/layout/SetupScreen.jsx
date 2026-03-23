@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import { FACTIONS } from '../../data/factions';
 import { FACTION_IMAGES } from '../../data/factionImages';
 import { PRIMARY_MISSIONS, TWISTS } from '../../data/missions';
@@ -142,7 +143,7 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
   );
 }
 
-export function SetupScreen() {
+export function SetupScreen({ onShowModeModal }) {
   const primaryMission = useGameStore((s) => s.primaryMission);
   const twist          = useGameStore((s) => s.twist);
   const p1             = useGameStore((s) => s.players[1]);
@@ -170,11 +171,20 @@ export function SetupScreen() {
     primaryMission !== null;
 
   return (
-    <div className="min-h-screen bg-surface-base text-text-primary flex flex-col p-4 gap-6">
+    <div className="relative min-h-screen bg-surface-base text-text-primary flex flex-col p-4 gap-6">
+      {onShowModeModal && (
+        <button
+          onClick={onShowModeModal}
+          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-surface-panel border border-border-subtle text-chrome hover:text-text-primary hover:border-border-strong transition-colors"
+          aria-label="Switch device mode"
+        >
+          <SlidersHorizontal size={16} />
+        </button>
+      )}
       <h1 className="font-display text-2xl font-bold text-center text-text-primary">Game Setup</h1>
 
       {/* Player columns */}
-      <div className="flex gap-4">
+      <div className="flex flex-col md:flex-row gap-4">
         <PlayerSetupColumn playerNum={1} accentBorderClass="border-accent" />
         <PlayerSetupColumn playerNum={2} accentBorderClass="border-danger" />
       </div>

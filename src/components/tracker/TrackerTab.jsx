@@ -552,10 +552,19 @@ function PhaseReminders({ faction, detachment, phaseIndex }) {
 
 export function TrackerTab({ attackerNum, firstPlayerNum, secondPlayerNum }) {
   const activePlayer = useGameStore((s) => s.activePlayer);
+  const firstName    = useGameStore((s) => s.players[firstPlayerNum].name);
+  const secondName   = useGameStore((s) => s.players[secondPlayerNum].name);
   const [expandedInactive, setExpandedInactive] = useState(false);
+  const [mobileActivePlayer, setMobileActivePlayer] = useState(
+    () => activePlayer === firstPlayerNum ? 'first' : 'second'
+  );
 
   // Reset expanded state when the active player changes (turn advances)
   useEffect(() => { setExpandedInactive(false); }, [activePlayer]);
+  // Sync mobile active panel with store's active player
+  useEffect(() => {
+    setMobileActivePlayer(activePlayer === firstPlayerNum ? 'first' : 'second');
+  }, [activePlayer, firstPlayerNum]);
 
   const leftIsActive    = activePlayer === firstPlayerNum;
   const leftIsExpanded  = expandedInactive && !leftIsActive;
@@ -565,35 +574,89 @@ export function TrackerTab({ attackerNum, firstPlayerNum, secondPlayerNum }) {
   const leftFlex  = leftIsExpanded  ? 'flex-[9]' : leftIsActive && !expandedInactive  ? 'flex-[9]' : 'flex-[1]';
   const rightFlex = rightIsExpanded ? 'flex-[9]' : !leftIsActive && !expandedInactive ? 'flex-[9]' : 'flex-[1]';
 
+  const firstIsAttacker  = firstPlayerNum === attackerNum;
+  const firstAccentText  = firstIsAttacker ? 'text-danger' : 'text-success';
+  const secondAccentText = firstIsAttacker ? 'text-success' : 'text-danger';
+
   return (
-    <div className="h-full flex overflow-hidden">
-      {/* Left: player who goes first */}
-      <div className={`flex overflow-hidden transition-[flex] duration-200 ${leftFlex}`}>
-        <PlayerTrackerPanel
-          playerNum={firstPlayerNum}
-          isAttacker={firstPlayerNum === attackerNum}
-          isActive={leftIsActive}
-          isExpanded={leftIsExpanded}
-          isShrunk={leftIsActive && expandedInactive}
-          onExpand={() => setExpandedInactive(true)}
-          onCollapse={() => setExpandedInactive(false)}
-          onActiveClick={expandedInactive ? () => setExpandedInactive(false) : undefined}
-        />
+    <>
+      {/* Desktop layout */}
+      <div className="hidden md:flex h-full overflow-hidden">
+        {/* Left: player who goes first */}
+        <div className={`flex overflow-hidden transition-[flex] duration-200 ${leftFlex}`}>
+          <PlayerTrackerPanel
+            playerNum={firstPlayerNum}
+            isAttacker={firstIsAttacker}
+            isActive={leftIsActive}
+            isExpanded={leftIsExpanded}
+            isShrunk={leftIsActive && expandedInactive}
+            onExpand={() => setExpandedInactive(true)}
+            onCollapse={() => setExpandedInactive(false)}
+            onActiveClick={expandedInactive ? () => setExpandedInactive(false) : undefined}
+          />
+        </div>
+
+        {/* Right: player who goes second */}
+        <div className={`flex overflow-hidden transition-[flex] duration-200 ${rightFlex}`}>
+          <PlayerTrackerPanel
+            playerNum={secondPlayerNum}
+            isAttacker={!firstIsAttacker}
+            isActive={!leftIsActive}
+            isExpanded={rightIsExpanded}
+            isShrunk={!leftIsActive && expandedInactive}
+            onExpand={() => setExpandedInactive(true)}
+            onCollapse={() => setExpandedInactive(false)}
+            onActiveClick={expandedInactive ? () => setExpandedInactive(false) : undefined}
+          />
+        </div>
       </div>
 
-      {/* Right: player who goes second */}
-      <div className={`flex overflow-hidden transition-[flex] duration-200 ${rightFlex}`}>
-        <PlayerTrackerPanel
-          playerNum={secondPlayerNum}
-          isAttacker={secondPlayerNum === attackerNum}
-          isActive={!leftIsActive}
-          isExpanded={rightIsExpanded}
-          isShrunk={!leftIsActive && expandedInactive}
-          onExpand={() => setExpandedInactive(true)}
-          onCollapse={() => setExpandedInactive(false)}
-          onActiveClick={expandedInactive ? () => setExpandedInactive(false) : undefined}
-        />
+      {/* Mobile layout */}
+      <div className="flex flex-col md:hidden h-full overflow-hidden">
+        {/* Player toggle bar */}
+        <div className="shrink-0 h-12 flex border-b border-border-subtle bg-surface-panel">
+          <button
+            onPointerDown={(e) => { e.preventDefault(); setMobileActivePlayer('first'); }}
+            className={`flex-1 h-12 text-sm font-medium transition-colors
+              ${mobileActivePlayer === 'first'
+                ? `${firstAccentText} border-b-2 border-current`
+                : 'text-chrome'}`}
+          >
+            P{firstPlayerNum} · {firstName}
+          </button>
+          <button
+            onPointerDown={(e) => { e.preventDefault(); setMobileActivePlayer('second'); }}
+            className={`flex-1 h-12 text-sm font-medium transition-colors
+              ${mobileActivePlayer === 'second'
+                ? `${secondAccentText} border-b-2 border-current`
+                : 'text-chrome'}`}
+          >
+            P{secondPlayerNum} · {secondName}
+          </button>
+        </div>
+
+        {/* Both panels always mounted; CSS controls visibility */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className={mobileActivePlayer === 'first' ? 'h-full' : 'hidden'}>
+            <PlayerTrackerPanel
+              playerNum={firstPlayerNum}
+              isAttacker={firstIsAttacker}
+              isActive={true}
+              isExpanded={false}
+              isShrunk={false}
+            />
+          </div>
+          <div className={mobileActivePlayer === 'second' ? 'h-full' : 'hidden'}>
+            <PlayerTrackerPanel
+              playerNum={secondPlayerNum}
+              isAttacker={!firstIsAttacker}
+              isActive={true}
+              isExpanded={false}
+              isShrunk={false}
+            />
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
