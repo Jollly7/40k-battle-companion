@@ -20,6 +20,7 @@ export function GameScreen({ initialTab, onShowModeModal }) {
 
   const [activeTab, setActiveTab]     = useState(initialTab ?? 'tracker');
   const [showSummary, setShowSummary] = useState(false);
+  const isArmyMode = localStorage.getItem('wh40k-device-mode') === 'army';
 
   // Auto-open modal when game ends
   useEffect(() => {
@@ -28,7 +29,9 @@ export function GameScreen({ initialTab, onShowModeModal }) {
 
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-surface-base text-text-primary">
-      <Header onReset={resetGame} onViewSummary={() => setShowSummary(true)} />
+      <div className={isArmyMode ? 'hidden md:block' : undefined}>
+        <Header onReset={resetGame} onViewSummary={() => setShowSummary(true)} />
+      </div>
 
       {gameOver && (
         <div className="px-4 py-1.5 bg-danger-muted border-b border-danger/30 text-center
