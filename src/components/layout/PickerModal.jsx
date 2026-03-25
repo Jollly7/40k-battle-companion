@@ -110,7 +110,7 @@ function ImageCard({ item, onSelect, onPreview, selected, cardAspect }) {
 
   return (
     <button
-      onPointerDown={(e) => { e.preventDefault(); onPreview ? onPreview(item) : onSelect(item.label); }}
+      onClick={() => { onPreview ? onPreview(item) : onSelect(item.label); }}
       className={`relative rounded-panel overflow-hidden bg-surface-inset hover:ring-2 hover:ring-accent/40 active:ring-accent/70 transition-all text-left w-full ${cardAspect ? '' : 'min-h-48'} ${selected ? 'ring-2 ring-accent' : ''}`}
       style={cardAspect ? { aspectRatio: cardAspect } : undefined}
     >

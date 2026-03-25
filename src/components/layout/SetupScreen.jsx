@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { FACTIONS } from '../../data/factions';
 import { FACTION_IMAGES } from '../../data/factionImages';
-import { PRIMARY_MISSIONS, TWISTS } from '../../data/missions';
-import { PRIMARY_MISSION_IMAGES, TWIST_IMAGES } from '../../data/missionImages';
 import { useGameStore } from '../../store/gameStore';
 import { PickerModal } from './PickerModal';
 
@@ -31,13 +29,6 @@ const FACTION_ITEMS = [
     label: name,
     imageUrl: FACTION_IMAGES[name],
   })),
-];
-
-// Items for mission/twist pickers
-const MISSION_ITEMS = PRIMARY_MISSIONS.map((m) => ({ label: m, imageUrl: PRIMARY_MISSION_IMAGES[m] }));
-const TWIST_ITEMS = [
-  { label: 'No Twist' },
-  ...TWISTS.map((t) => ({ label: t, imageUrl: TWIST_IMAGES[t] })),
 ];
 
 function PlayerSetupColumn({ playerNum, accentBorderClass }) {
@@ -92,7 +83,7 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
       <div className="flex flex-col gap-1">
         <span className="text-sm text-text-secondary">Faction</span>
         <button
-          onPointerDown={(e) => { e.preventDefault(); setShowFactionPicker(true); }}
+          onClick={() => setShowFactionPicker(true)}
           className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
             ${faction
               ? 'bg-accent-muted border-accent text-accent font-medium'
@@ -108,7 +99,7 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
         <div className="flex flex-col gap-1">
           <span className="text-sm text-text-secondary">Detachment</span>
           <button
-            onPointerDown={(e) => { e.preventDefault(); setShowDetachmentPicker(true); }}
+            onClick={() => setShowDetachmentPicker(true)}
             className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
               ${detachment
                 ? 'bg-accent-muted border-accent text-accent font-medium'
@@ -144,31 +135,13 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
 }
 
 export function SetupScreen({ onShowModeModal }) {
-  const primaryMission = useGameStore((s) => s.primaryMission);
-  const twist          = useGameStore((s) => s.twist);
-  const p1             = useGameStore((s) => s.players[1]);
-  const p2             = useGameStore((s) => s.players[2]);
-  const setPrimaryMission = useGameStore((s) => s.setPrimaryMission);
-  const setTwist          = useGameStore((s) => s.setTwist);
-  const startGame         = useGameStore((s) => s.startGame);
-
-  const [showMissionPicker, setShowMissionPicker] = useState(false);
-  const [showTwistPicker,   setShowTwistPicker]   = useState(false);
-
-  function handleMissionSelect(name) {
-    setPrimaryMission(name);
-    setShowMissionPicker(false);
-  }
-
-  function handleTwistSelect(name) {
-    setTwist(name === 'No Twist' ? null : name);
-    setShowTwistPicker(false);
-  }
+  const p1        = useGameStore((s) => s.players[1]);
+  const p2        = useGameStore((s) => s.players[2]);
+  const startGame = useGameStore((s) => s.startGame);
 
   const canStart =
     p1.name.trim() !== '' && p1.faction !== null && p1.detachment !== null &&
-    p2.name.trim() !== '' && p2.faction !== null && p2.detachment !== null &&
-    primaryMission !== null;
+    p2.name.trim() !== '' && p2.faction !== null && p2.detachment !== null;
 
   return (
     <div className="relative min-h-screen bg-surface-base text-text-primary flex flex-col p-4 gap-6">
@@ -188,75 +161,6 @@ export function SetupScreen({ onShowModeModal }) {
         <PlayerSetupColumn playerNum={1} accentBorderClass="border-accent" />
         <PlayerSetupColumn playerNum={2} accentBorderClass="border-danger" />
       </div>
-
-      {/* Mission selection */}
-      <div className="rounded-panel border border-border-subtle bg-surface-panel shadow-panel p-4 flex flex-col gap-4">
-        <h2 className="font-display text-lg font-semibold text-text-primary">Mission</h2>
-
-        <div className="flex gap-4 flex-wrap">
-          {/* Primary Mission */}
-          <div className="flex flex-col gap-1 flex-1 min-w-48">
-            <span className="text-sm text-text-secondary">Primary Mission</span>
-            <button
-              onPointerDown={(e) => { e.preventDefault(); setShowMissionPicker(true); }}
-              className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
-                ${primaryMission
-                  ? 'bg-accent-muted border-accent text-accent font-medium'
-                  : 'bg-surface-inset border-border-subtle text-text-muted hover:border-border-strong'
-                }`}
-            >
-              {primaryMission ?? '— Select mission —'}
-            </button>
-          </div>
-
-          {/* Twist */}
-          <div className="flex flex-col gap-1 flex-1 min-w-48">
-            <span className="text-sm text-text-secondary">Twist Card <span className="text-text-muted">(optional)</span></span>
-            <button
-              onPointerDown={(e) => { e.preventDefault(); setShowTwistPicker(true); }}
-              className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
-                ${twist
-                  ? 'bg-accent-muted border-accent text-accent font-medium'
-                  : 'bg-surface-inset border-border-subtle text-text-secondary hover:border-border-strong'
-                }`}
-            >
-              {twist ?? 'No Twist'}
-            </button>
-          </div>
-
-          {/* Secondary mode — display only */}
-          <div className="flex flex-col gap-1 flex-1 min-w-48">
-            <span className="text-sm text-text-secondary">Secondary Mode</span>
-            <div className="bg-surface-inset rounded-panel px-3 h-12 flex items-center border border-border-subtle text-text-secondary">
-              Tactical
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Mission card picker modal */}
-      {showMissionPicker && (
-        <PickerModal
-          title="Select Primary Mission"
-          items={MISSION_ITEMS}
-          onSelect={handleMissionSelect}
-          onClose={() => setShowMissionPicker(false)}
-          selectedLabel={primaryMission}
-          cardAspect="620/1063"
-        />
-      )}
-
-      {/* Twist card picker modal */}
-      {showTwistPicker && (
-        <PickerModal
-          title="Select Twist Card"
-          items={TWIST_ITEMS}
-          onSelect={handleTwistSelect}
-          onClose={() => setShowTwistPicker(false)}
-          selectedLabel={twist ?? 'No Twist'}
-          cardAspect="620/1063"
-        />
-      )}
 
       {/* Start Game */}
       <button

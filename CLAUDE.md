@@ -117,6 +117,7 @@ Each round has two Player Turns (Player 1 then Player 2), each with 5 phases:
 - **Touch event handling**: All interactions are discrete taps. Two patterns are used depending on scroll-interference risk:
   - **Standard buttons** (no scroll risk — e.g. CP, VP, phase, close buttons): `onPointerDown={(e) => { e.preventDefault(); handler(); }}`. Suppresses the synthetic click, preventing double-fires on tablet.
   - **Tappable elements that compete with scroll** (e.g. card thumbnails, keyword/ability chips): use the split pattern — `onPointerDown` captures element rect for animation, `onClick` opens the popup. `onClick` only fires when the finger lifts near where it pressed, providing drag-tolerance. Backdrop dismissal uses `onClick` to match.
+  - **Buttons that open modals/overlays**: use `onClick` only — NOT `onPointerDown`. The modal mounts while the finger is still down; the subsequent `click` event then lands inside the newly-opened overlay, triggering an unintended selection (tap-through). `onClick` fires on lift, before the modal exists. Double-fire is not a risk because the trigger button is immediately obscured by the modal. Examples: faction picker trigger, detachment picker trigger, mission/twist picker triggers.
   - **Buttons inside a clickable container**: add `e.stopPropagation()` to prevent bubbling to the parent.
   - **Exceptions — leave as `onClick`, do not modify**: file input triggers and `<a>` tags. These rely on browser-native behaviour tied to the click event.
 ---
