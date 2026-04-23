@@ -165,7 +165,7 @@ export function Header({ onReset, onViewSummary }) {
 
         {/* Action log toggle */}
         <button
-          onPointerDown={(e) => { e.preventDefault(); setLogOpen((o) => !o); }}
+          onClick={() => setLogOpen((o) => !o)}
           className={`flex items-center justify-center w-12 h-12 rounded-panel transition-colors
             ${logOpen ? 'text-text-primary bg-surface-inset' : 'text-chrome hover:text-chrome-hover hover:bg-surface-inset'}`}
           title="Action log"

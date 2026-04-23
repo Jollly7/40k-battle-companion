@@ -183,6 +183,7 @@ export function UnitAccordion({ unit, displayName, leader, isCharacter, validBod
   const effectiveName = displayName ?? unit.name;
   const { stats, ranged, melee, abilities, unitRules, keywords, composition } = unit;
   const sv = stats.invuln ? `${stats.SV} (${stats.invuln})` : stats.SV;
+  const totalModels = composition ? composition.reduce((sum, m) => sum + m.count, 0) : null;
 
   const hasValidBodyguards = isCharacter && validBodyguards && validBodyguards.length > 0;
 
@@ -232,6 +233,9 @@ export function UnitAccordion({ unit, displayName, leader, isCharacter, validBod
               </>
             ) : effectiveName}
           </span>
+          {totalModels > 1 && (
+            <span className="text-xs text-text-muted shrink-0">x{totalModels}</span>
+          )}
           {isMerged && (
             <div
               className="shrink-0 flex items-center justify-center min-w-[48px] min-h-[48px] text-text-muted hover:text-danger transition-colors cursor-pointer"

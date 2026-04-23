@@ -136,7 +136,10 @@ Each round has two Player Turns (Player 1 then Player 2), each with 5 phases:
 
 These capture decisions and deviations from original spec — read before touching any of these areas.
 
+#### Misc
 - **Space Marine chapters** (Black Templars, Blood Angels, etc.) are hidden from faction picker via `HIDDEN_FACTIONS` in `SetupScreen.jsx`; data retained in `factions.js`
+
+#### Game Flow
 - **Begin Battle** requires Attacker/Defender and First Turn roll-offs to be set
 - **Secondary deck** is shuffled on `startGame()` in the store
 - **Player layout**: left panel = player who goes first (set by roll-off); right = second; applies across all three tabs
@@ -144,29 +147,45 @@ These capture decisions and deviations from original spec — read before touchi
 - **Accent colours** are role-based (not player-number): applied via `ROLE_ACCENT` in `TrackerTab`, `PhasesTab`, `FactionsTab`; VP name labels in `ObjectivesSidebar` also use role colours
 - **`PlayerTrackerPanel`** accepts `isAttacker` boolean prop for accent colour
 - **`GameScreen`** derives `attackerNum`, `defenderNum`, `firstPlayerNum`, `secondPlayerNum` and passes as props to all tabs
+
+#### Command Points & Victory Points
 - **`vp.byRound`** is an array of `{ primary, sec1, sec2 }` objects; `vp.total/primary/secondary` always recomputed from scratch in `adjustVP`
 - **`adjustVP(player, round, column, delta)`** is the single VP mutation; **`adjustCP(player, delta)`** for CP — both log and snapshot automatically
 - **Auto +1 CP** fires inside `advancePhase` (store) when landing on phase 0; grants +1 to both players at each Command Phase transition
 - **VP table column headers** are conditional: active/expanded shows full names; inactive shows abbreviated
+
+#### Touch Events
 - **CP and VP buttons** use `onPointerDown` + `e.preventDefault()` to prevent browser double-fire
+
+#### Timers
 - **Per-player timers** are timestamp-based: `timers.p1/p2` hold banked elapsed seconds; `timerStartedAt` is a `Date.now()` anchor set on resume, cleared on pause; displayed time = `banked + (Date.now() - timerStartedAt) / 1000`; `setInterval` in Header only triggers re-renders, never mutates store
 - **Timer initial state**: `timerPaused: true` — timers don't start until user resumes; `toggleTimerPause()` banks elapsed and clears/sets anchor
 - **`advancePhase`**: same-player phases re-anchor; player-switch transitions bank outgoing player's timer then set new anchor
 - **localStorage persistence**: `history`, `timerPaused`, and `timerStartedAt` excluded from persistence; `timerPaused` forced to `true` and `timerStartedAt` to `null` on rehydration via `onRehydrateStorage`
 - **Game over**: `gameOver: true` set in store when advancing past Round 5 second-player Fight Phase; blocks `advancePhase`; Next Phase button labelled "Game Over" and disabled; inline banner beneath header
 - **Log timestamps** use combined elapsed (`timers.p1 + timers.p2 + live`) as total game time
+
+#### Header & Layout
 - **Header layout**: left (`shrink-0`): Round X/5 · Phase Name · Next Phase · Pause; center (`flex-1 justify-center`): P1 timer · P1 name · P1 stat block · vs · P2 stat block · P2 name · P2 timer; right (`shrink-0`): Undo · Log · Setup
 - **Header stat block** (`Header.jsx`, center section): `flex-col` with CP on top and VP below, separated by `<hr className="border-border-subtle">`; values are `text-base font-semibold tabular-nums`; suffix labels ("cp", "vp") are `text-[10px] font-normal text-text-secondary` inline after the number
 - **Pause button**: single button freezes/resumes both timers; green when paused (▶), gray when running (⏸)
+
+#### Misc
 - **Secondary cards**: `hand: { p1: [null, null], p2: [null, null] }` top-level store state; `drawCard` / `discardCard` both snapshot for undo; UI lives in `TrackerTab.jsx` as `SecondaryCardSlot` and `DrawModal`
 - **Card lightbox** (mission sidebar + secondary cards): `getBoundingClientRect()` on click, compute dx/dy to viewport centre, inject into `@keyframes` via `<style>` tag, spring easing `cubic-bezier(0.34, 1.56, 0.64, 1)`; tap backdrop to close
 - **DrawModal** does NOT close on backdrop tap — user must tap cancel or select a card
 - **`onClick` / animation origin**: `getBoundingClientRect()` must be captured in `onPointerDown` and stored in a `useRef` (not state) to avoid stale values
 - **Tracker tab expand/collapse** is local `useState` in `TrackerTab`; resets on turn advance via `useEffect`; nothing written to store
+
+#### Phase & Reminders
 - **Reminders lookup**: keys are `faction||detachment` exact strings from `factions.js`; no string normalisation
 - **`reminders.js`** structure: `general_reminders` (all armies), `faction_reminders` (per faction), `detachment_reminders` (per detachment); `PhaseReminders` component colocated in `TrackerTab.jsx`; returns null when no reminders match
+
+#### Misc
 - **Inactive sliver −1 CP button** (`TrackerTab.jsx`, inside `isCollapsedInactive || isShrunk` branch): uses `onPointerDown` + `e.stopPropagation()` to spend CP without triggering panel expand; `w-12 h-12` (48px) tap target; `disabled` at CP 0 for visual feedback; inserted between stats badge and `MiniVPTable`
-- **Roster import**: Players import army lists as .json files exported directly from NewRecruit. Parsed client-side by `src/utils/parseRosterJson.js`. Stored in localStorage under `wh40k-imported-rosters` as an array of `{ label, faction, detachment, units }`. Player selections persisted under `wh40k-army-selection` as `{ p1: label | null, p2: label | null }`. Re-importing a file with the same label replaces the existing entry. No committed roster files exist in the codebase.
+
+#### Roster Import
+- **Roster import**: Players import army lists as .json files exported directly from NewRecruit. Parsed client-side by `src/utils/parseRosterJson.js`. Synced to Cloudflare KV (source of truth) via `POST /api/rosters`; localStorage (`wh40k-imported-rosters`) retained as offline fallback. Army tab fetches from `GET /api/rosters` on mount and merges with localStorage. Player selections persisted under `wh40k-army-selection` as `{ p1: label | null, p2: label | null }`. Re-importing a file with the same label replaces the existing entry. No committed roster files exist in the codebase.
 
 ---
 
@@ -190,10 +209,13 @@ These capture decisions and deviations from original spec — read before touchi
 | v1.5 | End-of-game modal, CP/VP legibility, reminders reorder, inactive −1 CP | ✅ Done |
 | v1.6 | Army list reference tab (UnitAccordion, weapon tables, abilities) | ✅ Done |
 | v1.7 | .json roster import (NewRecruit, client-side parse, localStorage) | ✅ Done |
+| v1.7.2 | Leader Attachment — character detection, bodyguard linking, attachment UI | ✅ Done |
+| v1.7.3 | Leader Attachment bug fixes — bodyguard fuzzy matching | ✅ Done |
 | v1.8.1 | Cloudflare migration + KV roster sync | ✅ Done |
 | v1.8.2 | Mobile layout (responsive Army tab, portrait, player toggle) | ✅ Done |
 | v1.8.3 | Mobile layout — Tracker, Factions, Setup screen fixes | ✅ Done |
-| v1.8.4 | Unit rules in Abilities / Rules section (UnitAccordion + parser) | ✅ Done |
+| v1.8.3.3 | Unit rules in Abilities / Rules section (UnitAccordion + parser) | ✅ Done |
+| v1.8.3.4 | Log button tap-through fix + model count in UnitAccordion header | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -203,9 +225,13 @@ These capture decisions and deviations from original spec — read before touchi
 
 ## Current Progress
 
-**Last updated:** 22/04/2026
+**Last updated:** 23/04/2026
 
-**Status:** v1.8.4 shipped — unit `selection.rules[]` (e.g. Deadly Demise, For The Greater Good) now parsed into `unit.unitRules[]` and shown as teal chips in "Abilities / Rules" section of UnitAccordion.
+**Status:** v1.8.3.4 remains the latest shipped version. CLAUDE.md audited and updated: `wh40k-army-selection` key shape corrected to `{ p1, p2 }` throughout, roster storage references updated to reflect KV as source of truth (v1.8.1), Key Implementation Notes reorganised with `####` subheadings, Leader Attachment (v1.7.2–v1.7.3) added to Build History and spec sections.
+
+**v1.8.3.4 — two fixes:**
+1. **Log button tap-through fix** (`Header.jsx`): log toggle button changed from `onPointerDown` to `onClick`. The `fixed inset-0 z-10` backdrop was intercepting the post-press click and immediately closing the dropdown. Backdrop dismissal was already correct (`onClick`).
+2. **Model count in UnitAccordion header** (`UnitAccordion.jsx`): total model count shown inline after unit name (e.g. `Strike Team x10`) when count > 1. Derived by summing `composition[].count`; hidden for single-model units and null composition.
 
 **Touch event audit completed 23/03/2026** — full codebase sweep; all `onClick` violations on buttons and tappable elements converted to `onPointerDown` + `e.preventDefault()`. Subsequently updated (scroll-swipe fix): card thumbnails and ability/keyword chips now use the split pattern (`onPointerDown` captures rect, `onClick` opens popup); their backdrop dismissals use `onClick` to match. This applies to: `AbilityPopup` backdrop (`UnitAccordion.jsx`), primary mission lightbox backdrop (`ObjectivesSidebar.jsx`), twist lightbox backdrop (`ObjectivesSidebar.jsx`).
 
@@ -284,7 +310,7 @@ Pure transform function: `parseRosterJson(json)` → internal roster shape. No R
 
 **`ArmyTab.jsx`:**
 - `wh40k-imported-rosters` localStorage key — array of full roster objects `{ label, faction, detachment, units }`
-- `wh40k-army-selection` localStorage key — `{ attacker: label | null, defender: label | null }`
+- `wh40k-army-selection` localStorage key — `{ p1: label | null, p2: label | null }`
 - `RosterControls` component per player: hidden `<input type="file" accept=".json">` triggered via `useRef`; reads file with `FileReader`, parses JSON, calls `parseRosterJson`; on success auto-selects the imported roster; inline error on failure
 - Dropdown alongside Import button: lists all imported rosters by label; hidden when no rosters imported yet; both panels share the same pool, independent selections
 - Re-importing a file with the same `label` replaces the existing entry
@@ -305,6 +331,41 @@ Pure transform function: `parseRosterJson(json)` → internal roster shape. No R
 - `scripts/parseRoster.mjs`
 - `src/data/armyLists.js` (replaced by localStorage import)
 - `src/data/rosters/` (all `.js` roster files + `index.js`)
+
+---
+
+### v1.7.2 — Leader Attachment
+
+Allows players to mark a Character unit as attached to a bodyguard unit in the Army tab. Attachment state is display-only — it does not enforce rules, only reflects the player's chosen pairing.
+
+#### Character detection
+
+- A unit is a **leader** if it has the `[Character]` keyword AND at least one ability with `typeName === "Abilities"` whose `name === "Leader"`
+- The `Leader` ability description encodes valid bodyguard unit names between `^^` markers, e.g. `^^Strike Team^^` or `^^Strike Team^^Breacher Team^^`
+- `parseRosterJson.js` extracts these into `unit.leaderOf: string[]` — an array of valid bodyguard unit names (may be empty if no `^^` markers found)
+- Units with no `[Character]` keyword are never leaders regardless of abilities
+
+#### Bodyguard matching
+
+- Matching is fuzzy: a leader's `leaderOf` entry matches a unit if the roster unit name **contains** the bodyguard string (case-insensitive)
+- This handles names like `"Veteran Intercessors"` matching `"Intercessors"` in the leader description
+- v1.7.3 introduced this fuzzy matching to fix cases where exact string match failed
+
+#### Attachment state
+
+- Stored in localStorage under `wh40k-leader-attachments`
+- Shape: `{ [rosterLabel]: { [leaderUnitIndex]: bodyguardUnitIndex | null } }` — array indices are used as stable unit identifiers within a roster
+- Managed in `ArmyTab.jsx`
+- Attachment is per-roster (keyed by roster label) and per-player (each player has their own roster)
+
+#### UI
+
+- Attachment controls live inside `UnitAccordion.jsx` for leader units only
+- Leaders show a dropdown listing valid bodyguard units (derived from `leaderOf` fuzzy matches against the roster)
+- When a leader is attached: the leader accordion and bodyguard accordion are visually merged — rendered as a combined unit entry
+- Duplicate unit names in a roster display as "Unit 1" / "Unit 2" to disambiguate
+- Accent colour for all leader-related UI elements: amber (`amber-400` / `amber-500`)
+- Unattached leaders and the attachment control use `amber-400`; merged/attached state uses `amber-500`
 
 ---
 
