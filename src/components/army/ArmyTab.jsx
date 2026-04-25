@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { parseRosterJson } from '../../utils/parseRosterJson';
 import { ArmyPanel } from './ArmyPanel';
+import { CombatOverlay } from './CombatOverlay';
 
 const LS_ROSTERS_KEY = 'wh40k-imported-rosters';
 const LS_SELECTION_KEY = 'wh40k-army-selection';
@@ -110,6 +111,9 @@ export function ArmyTab({ attackerNum }) {
   const [syncing, setSyncing] = useState(false);
   const [offline, setOffline] = useState(false);
   const [syncError, setSyncError] = useState(null);
+  const attackerUnit = useGameStore(s => s.attackerUnit);
+  const defenderUnit = useGameStore(s => s.defenderUnit);
+
   const [mobileActivePlayer, setMobileActivePlayer] = useState('attacker');
 
   // On mount: fetch rosters from KV; fall back to localStorage on failure
@@ -200,6 +204,30 @@ export function ArmyTab({ attackerNum }) {
 
   const attackerRoster = getRoster(selection.attacker);
   const defenderRoster = getRoster(selection.defender);
+
+  // Pending mode: exactly one combat unit is set — derive which panel is source/target
+  const pendingMode = (!!attackerUnit) !== (!!defenderUnit);
+  const sourceLabel = (attackerUnit ?? defenderUnit)?.rosterLabel;
+  const attackerPanelIsSource = pendingMode && sourceLabel === attackerRoster?.label;
+  const defenderPanelIsSource = pendingMode && !attackerPanelIsSource;
+  const attackerPanelIsTarget = pendingMode && !attackerPanelIsSource;
+  const defenderPanelIsTarget = pendingMode && attackerPanelIsSource;
+  const pendingRoleToSet = attackerUnit ? 'defender' : 'attacker';
+
+  // Chip shown on the source panel (the panel the designated unit came from)
+  const sourceChipBase = pendingMode ? {
+    displayName: (attackerUnit ?? defenderUnit)?.displayName,
+    role: attackerUnit ? 'attacker' : 'defender',
+  } : null;
+  const attackerChipData = attackerPanelIsSource ? sourceChipBase : null;
+  const defenderChipData = defenderPanelIsSource ? sourceChipBase : null;
+
+  // On mobile: auto-switch to the target panel so the user can immediately tap a unit
+  useEffect(() => {
+    if (!pendingMode) return;
+    if (attackerPanelIsTarget) setMobileActivePlayer('attacker');
+    if (defenderPanelIsTarget) setMobileActivePlayer('defender');
+  }, [pendingMode, attackerPanelIsTarget, defenderPanelIsTarget]);
   const attackerArmyName = getArmyName('attacker', attackerFaction, attackerName);
   const defenderArmyName = getArmyName('defender', defenderFaction, defenderName);
 
@@ -228,6 +256,12 @@ export function ArmyTab({ attackerNum }) {
 
   return (
     <div className="h-full">
+      {/* Combat overlay — attacker/defender cards rendered above all panels */}
+      <CombatOverlay
+        rosters={rosters}
+        attackerRosterLabel={selection.attacker}
+      />
+
       {/* ── Desktop layout — two-column side by side (>768px) ── */}
       <div className="hidden md:flex h-full overflow-hidden">
         <ArmyPanel
@@ -239,6 +273,9 @@ export function ArmyTab({ attackerNum }) {
           attachments={attachments}
           setAttachments={updateAttachments}
           importButton={attackerControls}
+          elevated={attackerPanelIsTarget}
+          pendingRole={attackerPanelIsTarget ? pendingRoleToSet : null}
+          chipData={attackerChipData}
         />
         <ArmyPanel
           armyData={defenderRoster}
@@ -249,6 +286,9 @@ export function ArmyTab({ attackerNum }) {
           attachments={attachments}
           setAttachments={updateAttachments}
           importButton={defenderControls}
+          elevated={defenderPanelIsTarget}
+          pendingRole={defenderPanelIsTarget ? pendingRoleToSet : null}
+          chipData={defenderChipData}
         />
       </div>
 
@@ -289,6 +329,9 @@ export function ArmyTab({ attackerNum }) {
             attachments={attachments}
             setAttachments={updateAttachments}
             importButton={attackerControls}
+            elevated={attackerPanelIsTarget}
+            pendingRole={attackerPanelIsTarget ? pendingRoleToSet : null}
+            chipData={attackerChipData}
           />
         </div>
         <div className={mobileActivePlayer === 'defender' ? 'contents' : 'hidden'}>
@@ -301,6 +344,9 @@ export function ArmyTab({ attackerNum }) {
             attachments={attachments}
             setAttachments={updateAttachments}
             importButton={defenderControls}
+            elevated={defenderPanelIsTarget}
+            pendingRole={defenderPanelIsTarget ? pendingRoleToSet : null}
+            chipData={defenderChipData}
           />
         </div>
       </div>

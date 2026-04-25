@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { UnitAccordion } from './UnitAccordion';
+import { UnitPopOut } from './UnitPopOut';
 
 /** Normalise for fuzzy matching: lowercase + strip all whitespace. Handles ALL CAPS and missing spaces (e.g. "HANDFLAMERS" vs "Hand Flamers"). */
 function normalizeName(s) {
   return s.toLowerCase().replace(/\s+/g, '');
 }
 
-export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, pKey, attachments, setAttachments }) {
+export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, pKey, attachments, setAttachments, elevated, pendingRole, chipData }) {
   const divider = isLeft ? 'border-r border-border-subtle' : '';
   const units = armyData?.units ?? [];
   const hasUnits = units.length > 0;
 
-  // Detachment from roster data; fall back to store value if not in roster
+  const setAttackerUnit = useGameStore(s => s.setAttackerUnit);
+  const setDefenderUnit = useGameStore(s => s.setDefenderUnit);
+
   const storeDetachment = useGameStore((s) => {
     const p1 = s.players[1];
     const p2 = s.players[2];
@@ -25,7 +28,6 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   const detachment = armyData?.detachment ?? storeDetachment ?? null;
   const rules = armyData?.rules ?? {};
 
-  // Dead units: { [rosterLabel]: Set<number> } — loaded from / saved to localStorage
   const [deadUnits, setDeadUnits] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('wh40k-dead-units') ?? '{}');
@@ -37,9 +39,10 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
     } catch { return {}; }
   });
 
+  const [selectedUnitIndex, setSelectedUnitIndex] = useState(null);
+
   useEffect(() => {
     try {
-      // Merge-on-save: read current state so the other panel's data is preserved
       const current = JSON.parse(localStorage.getItem('wh40k-dead-units') ?? '{}');
       for (const [k, v] of Object.entries(deadUnits)) {
         current[k] = [...v];
@@ -64,7 +67,6 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
     });
   }
 
-  // Clear this player's attachments when their roster label changes (skip first render)
   const initializedRef = useRef(false);
   const prevLabelRef = useRef(armyData?.label ?? null);
   useEffect(() => {
@@ -76,10 +78,10 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
     if (prevLabelRef.current !== currentLabel) {
       prevLabelRef.current = currentLabel;
       setAttachments(prev => ({ ...prev, [pKey]: {} }));
+      setSelectedUnitIndex(null);
     }
   }, [armyData?.label]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Compute display names — duplicate unit names get a numeric suffix
   const nameCounts = {};
   units.forEach(u => { nameCounts[u.name] = (nameCounts[u.name] || 0) + 1; });
   const nameCounters = {};
@@ -92,7 +94,6 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   const playerAttachments = (attachments && attachments[pKey]) ? attachments[pKey] : {};
   const attachedBodyguardIndices = new Set(Object.values(playerAttachments).map(Number));
 
-  // Points summary
   const grandTotal = units.reduce((sum, u) => sum + (u.pts ?? 0), 0);
   const aliveTotal = units.reduce((sum, u, i) => {
     const bodyguardIdxStr = playerAttachments[String(i)];
@@ -104,6 +105,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   const showPts = grandTotal > 0;
 
   function handleAttach(charIdx, bodyguardIdx) {
+    setSelectedUnitIndex(null);
     setAttachments(prev => ({
       ...prev,
       [pKey]: { ...(prev[pKey] ?? {}), [String(charIdx)]: String(bodyguardIdx) },
@@ -111,6 +113,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   }
 
   function handleDetach(charIdx) {
+    setSelectedUnitIndex(null);
     setAttachments(prev => {
       const next = { ...(prev[pKey] ?? {}) };
       delete next[String(charIdx)];
@@ -118,10 +121,26 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
     });
   }
 
-  // Build visible items with sort metadata (alive first, dead last)
+  function handleUnitSelect(primaryIdx) {
+    if (pendingRole) {
+      const item = itemsWithMeta.find(i => i.primaryIdx === primaryIdx);
+      if (!item || !rosterLabel) return;
+      const payload = {
+        rosterLabel,
+        unitIndex: item.unitPopOutProps.unitIndex,
+        leaderUnitIndex: item.unitPopOutProps.leaderUnitIndex,
+        displayName: item.unitPopOutProps.displayName,
+        leaderDisplayName: item.unitPopOutProps.leaderDisplayName,
+      };
+      if (pendingRole === 'attacker') setAttackerUnit(payload);
+      else setDefenderUnit(payload);
+      return;
+    }
+    setSelectedUnitIndex(prev => prev === primaryIdx ? null : primaryIdx);
+  }
+
   const itemsWithMeta = [];
   units.forEach((unit, i) => {
-    // Bodyguards that are attached to a leader are rendered inside the merged accordion
     if (attachedBodyguardIndices.has(i)) return;
 
     const charIdxStr = String(i);
@@ -129,14 +148,23 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
     const isAttached = bodyguardIdxStr !== undefined;
 
     if ((unit.isCharacter ?? false) && isAttached) {
-      // Merged accordion: bodyguard is the main unit, leader is the character
       const bodyguardIdx = Number(bodyguardIdxStr);
       const bodyguardUnit = units[bodyguardIdx];
-      if (!bodyguardUnit) return; // stale attachment — skip
+      if (!bodyguardUnit) return;
       const isDead = deadSet.has(bodyguardIdx);
       itemsWithMeta.push({
         primaryIdx: bodyguardIdx,
         isDead,
+        unitPopOutProps: {
+          unit: bodyguardUnit,
+          displayName: displayNames[bodyguardIdx],
+          leader: { unit, displayName: displayNames[i] },
+          isDead,
+          onToggleDead: () => { handleToggleDead(bodyguardIdx); setSelectedUnitIndex(null); },
+          unitIndex: bodyguardIdx,
+          leaderUnitIndex: i,
+          leaderDisplayName: displayNames[i],
+        },
         element: (
           <UnitAccordion
             key={i}
@@ -145,19 +173,18 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
             leader={{ unit, displayName: displayNames[i], onDetach: () => handleDetach(i) }}
             rules={rules}
             isDead={isDead}
+            onSelect={() => handleUnitSelect(bodyguardIdx)}
             onToggleDead={() => handleToggleDead(bodyguardIdx)}
           />
         ),
       });
     } else {
-      // Compute valid bodyguards for the Attach dropdown
       let validBodyguards;
       if (unit.isCharacter ?? false) {
         validBodyguards = units
           .map((u, idx) => ({ u, idx, displayName: displayNames[idx] }))
           .filter(({ u, idx }) => {
             if (!(unit.leaderOf ?? []).some(n => normalizeName(n) === normalizeName(u.name))) return false;
-            // Exclude bodyguards already attached to a different character
             const attachedToOther = Object.entries(playerAttachments).some(
               ([cIdxStr, bIdxStr]) => Number(bIdxStr) === idx && cIdxStr !== charIdxStr
             );
@@ -169,6 +196,16 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
       itemsWithMeta.push({
         primaryIdx: i,
         isDead,
+        unitPopOutProps: {
+          unit,
+          displayName: displayNames[i],
+          leader: undefined,
+          isDead,
+          onToggleDead: () => { handleToggleDead(i); setSelectedUnitIndex(null); },
+          unitIndex: i,
+          leaderUnitIndex: null,
+          leaderDisplayName: null,
+        },
         element: (
           <UnitAccordion
             key={i}
@@ -179,6 +216,7 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
             onAttach={(bgIdx) => handleAttach(i, bgIdx)}
             rules={rules}
             isDead={isDead}
+            onSelect={() => handleUnitSelect(i)}
             onToggleDead={() => handleToggleDead(i)}
           />
         ),
@@ -192,9 +230,12 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   });
 
   const visibleItems = itemsWithMeta.map(item => item.element);
+  const selectedItem = selectedUnitIndex !== null
+    ? itemsWithMeta.find(item => item.primaryIdx === selectedUnitIndex) ?? null
+    : null;
 
   return (
-    <div className={`flex-1 flex flex-col overflow-hidden bg-surface-base ${divider}`}>
+    <div className={`flex-1 flex flex-col overflow-hidden bg-surface-base ${divider}${(elevated || chipData) ? ' relative z-[60]' : ''}`}>
       {/* Panel header */}
       <div className="px-4 py-3 border-b border-border-subtle bg-surface-panel shrink-0">
         <div className="flex items-center gap-3">
@@ -211,6 +252,13 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
         )}
       </div>
 
+      {/* Pending selection prompt — shown when this panel is the target for auto-set */}
+      {pendingRole && (
+        <div className="shrink-0 px-4 py-2 text-xs text-center text-text-muted border-b border-border-subtle bg-surface-panel">
+          Tap a unit to set as {pendingRole === 'attacker' ? '⚔ Attacker' : '🛡 Defender'}
+        </div>
+      )}
+
       {/* Scrollable unit list */}
       <div className="flex-1 overflow-y-auto">
         {hasUnits ? visibleItems : (
@@ -219,6 +267,63 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
           </div>
         )}
       </div>
+
+      {/* Browse pop-out — suppressed when this panel is in pending auto-set mode */}
+      {selectedItem && !pendingRole && (
+        <UnitPopOut
+          {...selectedItem.unitPopOutProps}
+          rules={rules}
+          roleAccent={accentClass}
+          onClose={() => setSelectedUnitIndex(null)}
+          onSetAttacker={() => {
+            if (rosterLabel) {
+              setAttackerUnit({
+                rosterLabel,
+                unitIndex: selectedItem.unitPopOutProps.unitIndex,
+                leaderUnitIndex: selectedItem.unitPopOutProps.leaderUnitIndex,
+                displayName: selectedItem.unitPopOutProps.displayName,
+                leaderDisplayName: selectedItem.unitPopOutProps.leaderDisplayName,
+              });
+            }
+            setSelectedUnitIndex(null);
+          }}
+          onSetDefender={() => {
+            if (rosterLabel) {
+              setDefenderUnit({
+                rosterLabel,
+                unitIndex: selectedItem.unitPopOutProps.unitIndex,
+                leaderUnitIndex: selectedItem.unitPopOutProps.leaderUnitIndex,
+                displayName: selectedItem.unitPopOutProps.displayName,
+                leaderDisplayName: selectedItem.unitPopOutProps.leaderDisplayName,
+              });
+            }
+            setSelectedUnitIndex(null);
+          }}
+        />
+      )}
+
+      {/* Pending chip — floats centred within this panel when a unit from here is designated but the other hasn't been picked yet */}
+      {chipData && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center">
+          <div className={`bg-surface-panel rounded-xl border border-l-4 ${chipData.role === 'attacker' ? 'border-danger' : 'border-success'} shadow-xl px-4 py-3 max-w-[220px] w-full mx-4`}>
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className={`text-xs font-semibold ${chipData.role === 'attacker' ? 'text-danger' : 'text-success'} truncate min-w-0 flex-1`}>
+                {chipData.role === 'attacker' ? '⚔' : '🛡'} {chipData.displayName}
+              </div>
+              <button
+                onPointerDown={(e) => { e.preventDefault(); chipData.role === 'attacker' ? setAttackerUnit(null) : setDefenderUnit(null); }}
+                className="shrink-0 text-text-muted hover:text-text-primary min-w-[32px] min-h-[32px] flex items-center justify-center text-sm"
+                aria-label="Clear selection"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-[10px] text-text-muted leading-snug">
+              Tap a unit to set as {chipData.role === 'attacker' ? 'Defender' : 'Attacker'}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -62,6 +62,8 @@ const initialState = {
   hand: { p1: [null, null], p2: [null, null] }, // secondary card hand per player
   history: [], // array of game-state snapshots for undo
   log: [],     // array of { message, timestamp } action log entries
+  attackerUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
+  defenderUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
 };
 
 export const useGameStore = create(
@@ -136,7 +138,7 @@ export const useGameStore = create(
   setPlayerRole: (player, role) =>
     set((s) => ({ players: { ...s.players, [player]: { ...s.players[player], role } } })),
 
-  resetGame: () => set(initialState),
+  resetGame: () => set({ ...initialState, attackerUnit: null, defenderUnit: null }),
 
   // --- Command Points ---
   adjustCP: (player, delta) => {
@@ -322,6 +324,11 @@ export const useGameStore = create(
       },
     }));
   },
+
+  // --- Combat unit designation (attacker/defender pop-out) ---
+  setAttackerUnit: (payload) => set({ attackerUnit: payload }),
+  setDefenderUnit: (payload) => set({ defenderUnit: payload }),
+  clearCombatUnits: () => set({ attackerUnit: null, defenderUnit: null }),
 
   // --- Undo ---
   undo: () => {
