@@ -22,7 +22,7 @@ export function PickerModal({ title, items, onSelect, onClose, selectedLabel, ca
         </div>
 
         {/* Grid */}
-        <div className="overflow-y-auto p-4">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4">
           {hasImages ? (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {items.map((item, i) =>

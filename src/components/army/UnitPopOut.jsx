@@ -140,8 +140,8 @@ export function AbilitiesSection({ abilities, unitRules, leaderAbilities, leader
                 : ability._isLeader
                 ? 'border border-amber-400 text-amber-400 hover:bg-amber-400/10'
                 : ability._isRule
-                ? 'border border-teal-500 text-teal-300 hover:bg-teal-500/10'
-                : 'text-text-muted border border-border-subtle hover:text-accent hover:border-accent'
+                ? 'text-text-muted border border-border-subtle hover:text-accent hover:border-accent'
+                : 'border border-teal-500 text-teal-300 hover:bg-teal-500/10'
             }`}
           >
             {ability.name}

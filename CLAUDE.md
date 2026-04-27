@@ -51,16 +51,23 @@ src/
     objectives/    # Objective map
     phases/        # Turn phase checklist
     army/          # Army list tab (ArmyTab.jsx, ArmyPanel.jsx, UnitAccordion.jsx)
+                   # Modals: ArmyRuleModal.jsx, StratagemsModal.jsx, StratagemCard.jsx, RulesAccordion.jsx
   store/
     gameStore.js   # Zustand store — single source of truth
+  hooks/
+    useArmyRuleData.js # Fetches and filters Wahapedia rules & stratagems for the active roster
   data/
+    csv/           # Wahapedia CSV exports (Factions, Stratagems, Abilities, etc.) — loaded via Vite `?raw`
     factions.js    # Faction + detachment lists
     phases.js      # 10th Edition phase definitions (5 phases)
     missions.js    # Mission card names (primary, secondary, twists, challenger)
     missionImages.js  # name → URL maps for all 4 mission decks
     reminders.js   # Phase reminder text, keyed by faction||detachment
   utils/
-    parseRosterJson.js  # Transforms NewRecruit .json export into internal roster shape
+    parseRosterJson.js     # Transforms NewRecruit .json export into internal roster shape
+    parseWahapediaCsv.js   # CSV parser + `sanitiseHtml` (plain-text strip, kept for legacy use)
+    renderWahapediaHtml.js # `renderWahapediaHtml` — sanitises Wahapedia HTML for safe innerHTML use
+    deduplicateByName.js   # Deduplication helper — retains only the highest-ID row per stratagem name
   App.jsx
   main.jsx
 ```
@@ -113,9 +120,9 @@ All interactions are discrete taps. Four patterns are used depending on context:
 
 | Pattern | When to use | Example |
 |---|---|---|
-| `onPointerDown` + `e.preventDefault()` | Standard buttons with no scroll risk | CP/VP buttons, phase buttons, close buttons |
+| `onPointerDown` + `e.preventDefault()` | Standard buttons with no scroll risk and no layout change | CP/VP buttons, phase buttons |
 | Split: `onPointerDown` captures rect, `onClick` opens popup | Tappable elements that compete with scroll | Card thumbnails, keyword/ability chips |
-| `onClick` only | Buttons that open modals or cause immediate layout shifts | Faction picker, detachment picker, mission pickers, dead unit toggle |
+| `onClick` only | Buttons that open modals, cause layout shifts, or **close/dismiss overlays** | Faction picker, detachment picker, mission pickers, dead unit toggle, **all close/✕ buttons** |
 | `onClick` + `e.stopPropagation()` | Buttons inside a clickable container | Nested action buttons |
 
 > **Exceptions — leave as `onClick`, do not modify:** `<input type="file">` triggers and `<a>` tags — these rely on browser-native behaviour.
@@ -123,6 +130,8 @@ All interactions are discrete taps. Four patterns are used depending on context:
 **Why `onClick` for modals:** The modal mounts while the finger is still down; a subsequent synthetic `click` lands inside the freshly-mounted overlay, triggering an unintended selection. `onClick` fires on lift, before the modal exists.
 
 **Why `onClick` for layout shifts:** If the action fires on `pointerDown`, the layout shifts before the finger lifts and the `click` lands on whatever element is now at those coordinates.
+
+**Why `onClick` for close/dismiss buttons:** Closing an overlay unmounts it while the finger is still down. The `pointerUp` + synthetic `click` then fires on whatever element is now visible at those coordinates, triggering an unintended action. Always use `onClick` for any button whose job is to remove, hide, or dismiss UI.
 
 ---
 
@@ -207,7 +216,7 @@ Read this section before touching any of these areas.
 **Expanded** — stats row, then:
 - Ranged weapons table (omitted if none): A · BS · S · AP · D · Keywords
 - Melee weapons table (omitted if none): A · WS · S · AP · D · Keywords
-- Abilities / Rules section: merged `unit.abilities` + `unit.unitRules`; chip colours by flag priority: `_isEnhancement` → fuchsia-500; `_isLeader && _isRule` → orange-500; `_isLeader` → amber-400; `_isRule` → teal-500; plain ability → muted border; `AbilityPopup` handles all
+- Abilities / Rules section: merged `unit.abilities` + `unit.unitRules`; chip colours by flag priority: `_isEnhancement` → fuchsia-500; `_isLeader && _isRule` → orange-500; `_isLeader` → amber-400; `_isRule` → muted border; plain ability → teal-500; `AbilityPopup` handles all
 - Composition accordion (collapsed by default): model breakdown with equipment
 
 **Dead units:**
@@ -276,6 +285,26 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 - Points: recursive sum of `costs` (name === "pts") across unit and all descendants
 - Multi-model fallback: if no Unit profile at top level, falls back to `collectProfiles(sel, 'Unit')[0]`
 
+### Wahapedia HTML Rendering
+
+- **`renderWahapediaHtml(html)`** in `src/utils/renderWahapediaHtml.js` — use this instead of `sanitiseHtml` whenever HTML structure must be preserved for display
+- Renames `<span class="kwb">` → `<span class="wh-kwb">`; strips all `style` and `class` attributes except `wh-kwb`; leaves all structural tags intact (`<b>`, `<ul>`, `<li>`, `<br>`, `<table>`, etc.)
+- Output is passed to `dangerouslySetInnerHTML` inside a `<div className="wh-content">` wrapper
+- `.wh-content` and `.wh-kwb` styles live in `src/index.css`; `.wh-kwb` renders keywords in blue (`#60a5fa`)
+- `sanitiseHtml` in `parseWahapediaCsv.js` is kept for any plain-text contexts; do not delete it
+
+### Army Tab — Rules & Stratagems (v1.9)
+
+- **Data source**: Wahapedia CSVs in `src/data/csv/`. Loaded via Vite `?raw` imports and parsed by `parseWahapediaCsv.js`.
+- **Hook `useArmyRuleData.js`**: Cross-references roster faction/detachment names with Wahapedia IDs. Normalises strings (lowercase, trim, smart-quote handling) for fuzzy matching. Returns `coreStratagems`, `detachmentStratagems`, `factionAbilities` (Army Rules), and `detachmentAbility`.
+- **HTML rendering**: All Wahapedia-sourced descriptions must use `renderWahapediaHtml(html)` wrapped in a `div.wh-content` — do not use `sanitiseHtml` for display contexts.
+- **Deduplication**: `deduplicateByName.js` retains only the highest-ID row per stratagem name when multiple CSV entries exist.
+- **UI**:
+  - "Army Rule" and "Stratagems" buttons in `ArmyPanel` header open fixed overlays.
+  - `RulesAccordion.jsx`: `grid-cols-2` stratagem layout for tablet landscape.
+  - `StratagemCard.jsx`: displays CP cost, type, phase/turn restrictions, and formatted description.
+- **Modal state**: `stratagemsOpen` and `armyRuleOpen` are local state in `ArmyPanel.jsx` — transient UI, no persistence needed.
+
 ### Cloudflare KV API (v1.8.1)
 
 - `GET /api/rosters` → `{ rosters: [...] }`
@@ -310,6 +339,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.8.5.3 | Full scrim on single-card state — global z-50 scrim covers all; target panel elevated z-[60] (clear); source panel elevated z-[60] with inner bg-black/75 overlay to appear covered; chip at z-20 above overlay | ✅ Done |
 | v1.8.5.4 | Combat overlay ✕ close buttons switched from `onPointerDown` to `onClick` — prevents tap-through to elements beneath after card closes | ✅ Done |
 | v1.8.5.5 | Browse card ✕ and pending chip ✕ switched to `onClick`; single-card scrim gains `onClick={clearCombatUnits}` — completes tap-through fix across all pop-out states | ✅ Done |
+| v1.9.0 | Wahapedia integration — CSV data layer (`src/data/csv/`); `useArmyRuleData` hook for faction/detachment matching; Army Rule & Stratagems modals (`ArmyRuleModal`, `StratagemsModal`, `RulesAccordion`, `StratagemCard`); `deduplicateByName` utility; HTML formatting preserved via `renderWahapediaHtml` + `.wh-content` | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -317,32 +347,18 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 ## Current Progress
 
-**Last updated:** 26/04/2026
+**Last updated:** 27/04/2026
 
-**Status:** v1.8.5.5 complete. All ✕ buttons across the unit pop-out system now use `onClick` (browse card in `UnitPopOut.jsx`, pending chip in `ArmyPanel.jsx`). Single-card state scrim in `CombatOverlay.jsx` now calls `clearCombatUnits` on tap. No remaining `onPointerDown` close handlers in the pop-out system. Planning v1.9 (rules panel, setup rework).
+**Status:** v1.9.0 complete. Wahapedia CSV data layer added (`src/data/csv/`). `useArmyRuleData` hook cross-references roster faction/detachment names against Wahapedia IDs with fuzzy normalisation. Army Rule and Stratagems modals ship in the Army tab — `ArmyRuleModal`, `StratagemsModal`, `RulesAccordion`, `StratagemCard`. Stratagem deduplication via `deduplicateByName.js`. All Wahapedia descriptions rendered via `renderWahapediaHtml` + `.wh-content`. `sanitiseHtml` retained for plain-text contexts only.
 
 ---
 
 ## Roadmap
 
-### v1.9 — Rules, Stratagems & Setup Rework (planned)
+### v1.10 — Setup Screen Rework & Mission Switcher (planned)
 
-Three related changes scoped together:
-
-1. **Faction & detachment rules panel** — surface rules already present in the imported `.json` (`force.rules[]` for faction rules; detachment rules nested inside the Detachment selection's child rules)
-2. **Stratagems panel** — core and detachment-specific stratagems from Wahapedia CSV data; requires cross-referencing additional CSV files before implementation; deferred to its own scoping session
-3. **Setup screen rework** — player army/detachment selection driven by imported `.json` rosters rather than manual faction picker dropdowns
-4. **Mission card switcher** — allow changing the active primary mission mid-game (for reference / correction)
-
----
-
-### v1.10 — Wahapedia Stratagems Deep Dive (planned)
-
-Full stratagems integration from Wahapedia CSV data. Requires:
-- Cross-referencing faction, detachment, and core stratagem CSV files (core stratagems are present under `type: "Core – ..."`)
-- Stripping/rendering HTML markup in description field (`<b>`, `<span class="kwb">`)
-- Mapping Wahapedia `faction_id` codes (e.g. `TAU`) to internal faction names
-- Scoping session required before implementation prompt
+1. **Setup screen rework** — player army/detachment selection driven by imported `.json` rosters rather than manual faction picker dropdowns
+2. **Mission card switcher** — allow changing the active primary mission mid-game
 
 ---
 

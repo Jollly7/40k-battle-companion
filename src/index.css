@@ -51,6 +51,14 @@
   --shadow-inset:  inset 0 1px 3px rgba(0,0,0,0.45);
 }
 
+.wh-content ul { list-style: disc; padding-left: 1.25rem; margin: 0.5rem 0; }
+.wh-content li { margin-bottom: 0.35rem; }
+.wh-content table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.8rem; }
+.wh-content th { background-color: #325b68; color: #ffffff; padding: 6px 10px; text-align: left; }
+.wh-content td { padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.wh-content br + br { display: block; margin-top: 0.5rem; }
+.wh-kwb { font-weight: 600; color: #60a5fa; }
+
 body {
   font-family: 'DM Sans', sans-serif;
   background-color: #131210;

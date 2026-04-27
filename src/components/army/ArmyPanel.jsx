@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { UnitAccordion } from './UnitAccordion';
 import { UnitPopOut } from './UnitPopOut';
+import { StratagemsModal } from './StratagemsModal';
+import { ArmyRuleModal } from './ArmyRuleModal';
 
 /** Normalise for fuzzy matching: lowercase + strip all whitespace. Handles ALL CAPS and missing spaces (e.g. "HANDFLAMERS" vs "Hand Flamers"). */
 function normalizeName(s) {
@@ -40,6 +42,8 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   });
 
   const [selectedUnitIndex, setSelectedUnitIndex] = useState(null);
+  const [stratagemsOpen, setStratagemsOpen] = useState(false);
+  const [armyRuleOpen, setArmyRuleOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -250,6 +254,22 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
             {faction ?? '—'}{detachment ? ` — ${detachment}` : ''}
           </div>
         )}
+        {(faction || detachment) && (
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={() => setArmyRuleOpen(true)}
+              className="flex-1 min-h-[48px] px-3 py-2 rounded-panel bg-surface-inset border border-border-subtle text-xs font-semibold text-text-primary hover:border-border-strong transition-colors"
+            >
+              Army Rule
+            </button>
+            <button
+              onClick={() => setStratagemsOpen(true)}
+              className="flex-1 min-h-[48px] px-3 py-2 rounded-panel bg-surface-inset border border-border-subtle text-xs font-semibold text-text-primary hover:border-border-strong transition-colors"
+            >
+              Stratagems
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Pending selection prompt — shown when this panel is the target for auto-set */}
@@ -303,6 +323,19 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
       )}
 
       {/* Pending chip — floats centred within this panel when a unit from here is designated but the other hasn't been picked yet */}
+      <StratagemsModal
+        isOpen={stratagemsOpen}
+        onClose={() => setStratagemsOpen(false)}
+        factionName={faction}
+        detachmentName={detachment}
+      />
+      <ArmyRuleModal
+        isOpen={armyRuleOpen}
+        onClose={() => setArmyRuleOpen(false)}
+        factionName={faction}
+        detachmentName={detachment}
+      />
+
       {chipData && <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-10" />}
       {chipData && (
         <div className="absolute inset-0 z-20 flex items-center justify-center">
