@@ -30,8 +30,16 @@ export function useArmyRuleData({ factionName, detachmentName }) {
       ? stratagems.filter(s => s.detachment_id === detachmentId)
       : [];
 
+    const sharedAbilityIds = factionId
+      ? new Set(
+          abilitiesAll
+            .filter(a => a.faction_id !== factionId)
+            .map(a => a.id)
+        )
+      : new Set();
+
     const factionAbilities = factionId
-      ? abilitiesAll.filter(a => a.faction_id === factionId)
+      ? abilitiesAll.filter(a => a.faction_id === factionId && !sharedAbilityIds.has(a.id))
       : [];
 
     const detachmentAbility = detachmentId
