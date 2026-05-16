@@ -296,7 +296,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 ### Army Tab — Rules & Stratagems (v1.9)
 
 - **Data source**: Wahapedia CSVs in `src/data/csv/`. Loaded via Vite `?raw` imports and parsed by `parseWahapediaCsv.js`.
-- **Hook `useArmyRuleData.js`**: Cross-references roster faction/detachment names with Wahapedia IDs. Normalises strings (lowercase, trim, smart-quote handling) for fuzzy matching. Returns `coreStratagems`, `detachmentStratagems`, `factionAbilities` (Army Rules), and `detachmentAbility`.
+- **Hook `useArmyRuleData.js`**: Cross-references roster faction/detachment names with Wahapedia IDs. Normalises strings (lowercase, trim, smart-quote handling) for fuzzy matching. Returns `coreStratagems`, `detachmentStratagems`, `factionAbilities` (Army Rules), and `detachmentAbility`. **Cross-faction deduplication**: after filtering abilities by `faction_id`, any ability whose `id` also appears under a *different* `faction_id` is excluded — prevents cross-tagged rows (e.g. Synapse, Shadow in the Warp tagged under both `TYR` and `GC`) from leaking into the wrong faction's Army Rule modal.
 - **HTML rendering**: All Wahapedia-sourced descriptions must use `renderWahapediaHtml(html)` wrapped in a `div.wh-content` — do not use `sanitiseHtml` for display contexts.
 - **Deduplication**: `deduplicateByName.js` retains only the highest-ID row per stratagem name when multiple CSV entries exist.
 - **UI**:
@@ -340,6 +340,8 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.8.5.4 | Combat overlay ✕ close buttons switched from `onPointerDown` to `onClick` — prevents tap-through to elements beneath after card closes | ✅ Done |
 | v1.8.5.5 | Browse card ✕ and pending chip ✕ switched to `onClick`; single-card scrim gains `onClick={clearCombatUnits}` — completes tap-through fix across all pop-out states | ✅ Done |
 | v1.9.0 | Wahapedia integration — CSV data layer (`src/data/csv/`); `useArmyRuleData` hook for faction/detachment matching; Army Rule & Stratagems modals (`ArmyRuleModal`, `StratagemsModal`, `RulesAccordion`, `StratagemCard`); `deduplicateByName` utility; HTML formatting preserved via `renderWahapediaHtml` + `.wh-content` | ✅ Done |
+| v1.9.1 | Cross-faction ability bleed fix — `useArmyRuleData` excludes ability IDs that appear under any other faction, preventing cross-tagged rows (e.g. Synapse, Shadow in the Warp) from showing in the wrong Army Rule modal | ✅ Done |
+| v1.10.0 | Setup screen rework — faction/detachment dropdowns replaced with per-player `RosterPickerModal`; `gameStore` gains `rosters`, `rostersLoaded`, `player1RosterLabel`, `player2RosterLabel`, `fetchRosters`, `selectRoster`, `setRosters`; roster list shared between Setup and Army tab via store; `ArmyTab` consumes store rosters with no-double-fetch guard | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -347,18 +349,17 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 ## Current Progress
 
-**Last updated:** 27/04/2026
+**Last updated:** 10/05/2026
 
-**Status:** v1.9.0 complete. Wahapedia CSV data layer added (`src/data/csv/`). `useArmyRuleData` hook cross-references roster faction/detachment names against Wahapedia IDs with fuzzy normalisation. Army Rule and Stratagems modals ship in the Army tab — `ArmyRuleModal`, `StratagemsModal`, `RulesAccordion`, `StratagemCard`. Stratagem deduplication via `deduplicateByName.js`. All Wahapedia descriptions rendered via `renderWahapediaHtml` + `.wh-content`. `sanitiseHtml` retained for plain-text contexts only.
+**Status:** v1.10.0 complete. Setup screen reworked: faction/detachment dropdowns replaced with a per-player `RosterPickerModal`. Roster list is now shared Zustand state (`rosters`, `rostersLoaded`) fetched once from KV (or localStorage fallback). `selectRoster(player, roster)` writes `faction`, `detachment`, and roster label to the store. Army tab reads rosters from the store; upload in both Army tab and picker modal keeps the store in sync.
 
 ---
 
 ## Roadmap
 
-### v1.10 — Setup Screen Rework & Mission Switcher (planned)
+### v1.10.x — Mission Switcher (planned)
 
-1. **Setup screen rework** — player army/detachment selection driven by imported `.json` rosters rather than manual faction picker dropdowns
-2. **Mission card switcher** — allow changing the active primary mission mid-game
+1. **Mission card switcher** — allow changing the active primary mission mid-game
 
 ---
 

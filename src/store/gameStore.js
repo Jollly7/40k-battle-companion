@@ -64,6 +64,8 @@ const initialState = {
   log: [],     // array of { message, timestamp } action log entries
   attackerUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
   defenderUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
+  player1RosterLabel: null,
+  player2RosterLabel: null,
 };
 
 export const useGameStore = create(
@@ -95,6 +97,8 @@ export const useGameStore = create(
 
   return {
   ...initialState,
+  rosters: [],
+  rostersLoaded: false,
 
   // --- Setup ---
   setPlayerName: (player, name) =>
@@ -138,7 +142,33 @@ export const useGameStore = create(
   setPlayerRole: (player, role) =>
     set((s) => ({ players: { ...s.players, [player]: { ...s.players[player], role } } })),
 
-  resetGame: () => set({ ...initialState, attackerUnit: null, defenderUnit: null }),
+  resetGame: () => set((s) => ({ ...initialState, attackerUnit: null, defenderUnit: null, rosters: s.rosters, rostersLoaded: s.rostersLoaded })),
+
+  // --- Roster management ---
+  fetchRosters: async () => {
+    try {
+      const res = await fetch('/api/rosters');
+      if (!res.ok) throw new Error('non-200');
+      const { rosters: kvRosters } = await res.json();
+      localStorage.setItem('wh40k-imported-rosters', JSON.stringify(kvRosters));
+      set({ rosters: kvRosters, rostersLoaded: true });
+    } catch {
+      const fallback = (() => {
+        try { return JSON.parse(localStorage.getItem('wh40k-imported-rosters') ?? '[]'); } catch { return []; }
+      })();
+      set({ rosters: fallback, rostersLoaded: true });
+    }
+  },
+
+  setRosters: (rosters) => set({ rosters }),
+
+  selectRoster: (player, roster) => set((s) => ({
+    ...(player === 1 ? { player1RosterLabel: roster.label } : { player2RosterLabel: roster.label }),
+    players: {
+      ...s.players,
+      [player]: { ...s.players[player], faction: roster.faction, detachment: roster.detachment },
+    },
+  })),
 
   // --- Command Points ---
   adjustCP: (player, delta) => {

@@ -8,10 +8,6 @@ const LS_ROSTERS_KEY = 'wh40k-imported-rosters';
 const LS_SELECTION_KEY = 'wh40k-army-selection';
 const LS_ATTACHMENTS_KEY = 'wh40k-leader-attachments';
 
-function loadImportedRosters() {
-  try { return JSON.parse(localStorage.getItem(LS_ROSTERS_KEY)) ?? []; } catch { return []; }
-}
-
 function saveImportedRosters(rosters) {
   localStorage.setItem(LS_ROSTERS_KEY, JSON.stringify(rosters));
 }
@@ -102,7 +98,11 @@ export function ArmyTab({ attackerNum }) {
   const attackerFaction = useGameStore((s) => s.players[attackerNum].faction);
   const defenderFaction = useGameStore((s) => s.players[defenderNum].faction);
 
-  const [rosters, setRosters] = useState(() => loadImportedRosters());
+  const rosters        = useGameStore((s) => s.rosters);
+  const rostersLoaded  = useGameStore((s) => s.rostersLoaded);
+  const fetchRosters   = useGameStore((s) => s.fetchRosters);
+  const setRosters     = useGameStore((s) => s.setRosters);
+
   const [selection, setSelection] = useState(() => {
     const saved = loadSelection();
     return { attacker: saved.attacker ?? null, defender: saved.defender ?? null };
@@ -116,24 +116,10 @@ export function ArmyTab({ attackerNum }) {
 
   const [mobileActivePlayer, setMobileActivePlayer] = useState('attacker');
 
-  // On mount: fetch rosters from KV; fall back to localStorage on failure
+  // On mount: fetch rosters only if not already loaded by another tab
   useEffect(() => {
-    setSyncing(true);
-    fetch('/api/rosters')
-      .then((res) => {
-        if (!res.ok) throw new Error('non-200');
-        return res.json();
-      })
-      .then(({ rosters: kvRosters }) => {
-        setRosters(kvRosters);
-        saveImportedRosters(kvRosters);
-        setOffline(false);
-      })
-      .catch(() => {
-        setOffline(true);
-      })
-      .finally(() => setSyncing(false));
-  }, []);
+    if (!rostersLoaded) fetchRosters();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateAttachments(updater) {
     setAttachments(prev => {
@@ -161,19 +147,16 @@ export function ArmyTab({ attackerNum }) {
   }
 
   function handleImport(playerKey, roster) {
-    // Save locally and update state immediately — local-first, don't block UI
-    setRosters(prev => {
-      const updated = prev.filter(r => r.label !== roster.label);
-      const next = [...updated, roster];
-      saveImportedRosters(next);
-      return next;
-    });
+    // Optimistic update: save to localStorage and update store immediately
+    const updated = [...rosters.filter((r) => r.label !== roster.label), roster];
+    saveImportedRosters(updated);
+    setRosters(updated);
     setSelection(prev => {
       const next = { ...prev, [playerKey]: roster.label };
       saveSelection(next);
       return next;
     });
-    // Background POST to KV
+    // Background POST to KV; refresh store on success
     fetch('/api/rosters', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -183,6 +166,7 @@ export function ArmyTab({ attackerNum }) {
         if (!res.ok) throw new Error('non-200');
         setOffline(false);
         setSyncError(null);
+        fetchRosters();
       })
       .catch(() => {
         setSyncError('Sync failed — roster saved locally only');

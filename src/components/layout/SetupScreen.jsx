@@ -1,62 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
-import { FACTIONS } from '../../data/factions';
-import { FACTION_IMAGES } from '../../data/factionImages';
 import { useGameStore } from '../../store/gameStore';
-import { PickerModal } from './PickerModal';
-
-const PINNED_FACTIONS = ["Genestealer Cults", "Grey Knights", "Orks", "T'au Empire"];
-
-// Space Marine chapters hidden in v1 — only "Space Marines" is shown; chapter data kept in factions.js for future use
-const HIDDEN_FACTIONS = [
-  "Black Templars",
-  "Blood Angels",
-  "Dark Angels",
-  "Deathwatch",
-  "Imperial Fists",
-  "Iron Hands",
-  "Raven Guard",
-  "Salamanders",
-  "Ultramarines",
-  "White Scars",
-];
-
-// Items for the faction grid — pinned factions first, then a separator, then the rest alphabetically
-const FACTION_ITEMS = [
-  ...PINNED_FACTIONS.map((name) => ({ label: name, imageUrl: FACTION_IMAGES[name], hideLabel: true })),
-  { separator: true },
-  ...Object.keys(FACTIONS).sort().filter((f) => !PINNED_FACTIONS.includes(f) && !HIDDEN_FACTIONS.includes(f)).map((name) => ({
-    label: name,
-    imageUrl: FACTION_IMAGES[name],
-  })),
-];
+import { RosterPickerModal } from '../army/RosterPickerModal';
 
 function PlayerSetupColumn({ playerNum, accentBorderClass }) {
-  const name       = useGameStore((s) => s.players[playerNum].name);
-  const faction    = useGameStore((s) => s.players[playerNum].faction);
-  const detachment = useGameStore((s) => s.players[playerNum].detachment);
-  const setPlayerName       = useGameStore((s) => s.setPlayerName);
-  const setPlayerFaction    = useGameStore((s) => s.setPlayerFaction);
-  const setPlayerDetachment = useGameStore((s) => s.setPlayerDetachment);
+  const name               = useGameStore((s) => s.players[playerNum].name);
+  const setPlayerName      = useGameStore((s) => s.setPlayerName);
+  const rosters            = useGameStore((s) => s.rosters);
+  const selectRoster       = useGameStore((s) => s.selectRoster);
+  const rosterLabel        = useGameStore((s) =>
+    playerNum === 1 ? s.player1RosterLabel : s.player2RosterLabel
+  );
 
-  const [showFactionPicker,    setShowFactionPicker]    = useState(false);
-  const [showDetachmentPicker, setShowDetachmentPicker] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const detachmentItems = faction
-    ? [...FACTIONS[faction]]
-        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-        .map((d) => ({ label: d }))
-    : [];
+  const selectedRoster = rosters.find((r) => r.label === rosterLabel) ?? null;
 
-  function handleFactionSelect(selectedFaction) {
-    setPlayerFaction(playerNum, selectedFaction);
-    setShowFactionPicker(false);
-    setShowDetachmentPicker(true); // immediately open detachment picker
-  }
-
-  function handleDetachmentSelect(selectedDetachment) {
-    setPlayerDetachment(playerNum, selectedDetachment);
-    setShowDetachmentPicker(false);
+  function handleSelect(roster) {
+    selectRoster(playerNum, roster);
   }
 
   return (
@@ -79,69 +40,56 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
         />
       </div>
 
-      {/* Faction trigger */}
+      {/* Roster picker trigger */}
       <div className="flex flex-col gap-1">
-        <span className="text-sm text-text-secondary">Faction</span>
+        <span className="text-sm text-text-secondary">Army Roster</span>
         <button
-          onClick={() => setShowFactionPicker(true)}
+          onClick={() => setPickerOpen(true)}
           className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
-            ${faction
+            ${selectedRoster
               ? 'bg-accent-muted border-accent text-accent font-medium'
               : 'bg-surface-inset border-border-subtle text-text-muted hover:border-border-strong'
             }`}
         >
-          {faction ?? 'Select faction…'}
+          {selectedRoster ? selectedRoster.label : 'Select roster…'}
         </button>
+        {selectedRoster && (
+          <span className="text-xs text-text-muted px-1">
+            {selectedRoster.faction ?? '—'}{selectedRoster.detachment ? ` — ${selectedRoster.detachment}` : ''}
+          </span>
+        )}
       </div>
 
-      {/* Detachment trigger — only shown once a faction is chosen */}
-      {faction && (
-        <div className="flex flex-col gap-1">
-          <span className="text-sm text-text-secondary">Detachment</span>
-          <button
-            onClick={() => setShowDetachmentPicker(true)}
-            className={`h-12 px-3 rounded-panel border text-left text-base transition-colors
-              ${detachment
-                ? 'bg-accent-muted border-accent text-accent font-medium'
-                : 'bg-surface-inset border-border-subtle text-text-muted hover:border-border-strong'
-              }`}
-          >
-            {detachment ?? 'Select detachment…'}
-          </button>
-        </div>
-      )}
-
-      {/* Faction picker modal */}
-      {showFactionPicker && (
-        <PickerModal
-          title="Select Faction"
-          items={FACTION_ITEMS}
-          onSelect={handleFactionSelect}
-          onClose={() => setShowFactionPicker(false)}
-        />
-      )}
-
-      {/* Detachment picker modal */}
-      {showDetachmentPicker && faction && (
-        <PickerModal
-          title={`Select Detachment — ${faction}`}
-          items={detachmentItems}
-          onSelect={handleDetachmentSelect}
-          onClose={() => setShowDetachmentPicker(false)}
-        />
-      )}
+      <RosterPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelect}
+        rosters={rosters}
+        selectedLabel={rosterLabel}
+      />
     </div>
   );
 }
 
 export function SetupScreen({ onShowModeModal }) {
-  const p1        = useGameStore((s) => s.players[1]);
-  const p2        = useGameStore((s) => s.players[2]);
-  const startGame = useGameStore((s) => s.startGame);
+  const p1              = useGameStore((s) => s.players[1]);
+  const p2              = useGameStore((s) => s.players[2]);
+  const startGame       = useGameStore((s) => s.startGame);
+  const fetchRosters    = useGameStore((s) => s.fetchRosters);
+  const rostersLoaded   = useGameStore((s) => s.rostersLoaded);
+  const rosters         = useGameStore((s) => s.rosters);
+  const p1RosterLabel   = useGameStore((s) => s.player1RosterLabel);
+  const p2RosterLabel   = useGameStore((s) => s.player2RosterLabel);
+
+  useEffect(() => {
+    if (!rostersLoaded) fetchRosters();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const canStart =
-    p1.name.trim() !== '' && p1.faction !== null && p1.detachment !== null &&
-    p2.name.trim() !== '' && p2.faction !== null && p2.detachment !== null;
+    p1.name.trim() !== '' && p1RosterLabel !== null &&
+    p2.name.trim() !== '' && p2RosterLabel !== null;
+
+  const noRosters = rostersLoaded && rosters.length === 0;
 
   return (
     <div className="relative min-h-screen bg-surface-base text-text-primary flex flex-col p-4 gap-6">
@@ -162,6 +110,13 @@ export function SetupScreen({ onShowModeModal }) {
         <PlayerSetupColumn playerNum={2} accentBorderClass="border-danger" />
       </div>
 
+      {/* No rosters hint */}
+      {noRosters && (
+        <p className="text-sm text-text-muted text-center">
+          Upload a roster in the Army tab to get started.
+        </p>
+      )}
+
       {/* Start Game */}
       <button
         onPointerDown={(e) => { e.preventDefault(); if (canStart) startGame(); }}
@@ -172,7 +127,7 @@ export function SetupScreen({ onShowModeModal }) {
             : 'bg-surface-inset text-text-muted cursor-not-allowed'
           }`}
       >
-        {canStart ? 'Start Game' : 'Complete setup to continue'}
+        {canStart ? 'Start Game' : 'Select a roster for each player to continue'}
       </button>
     </div>
   );
