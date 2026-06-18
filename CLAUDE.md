@@ -234,7 +234,7 @@ Three card states, all rendered as `fixed` overlays above all panels:
 - Triggered by tapping a unit row in `UnitAccordion`; state (`selectedUnitIndex`) lives in `ArmyPanel`
 - `fixed inset-0 z-50` scrim + `fixed z-[60]` centred card (max-w 480px, max-h 85vh, scrollable)
 - Enlarged stat block (all 6 stats); all stats neutral styling — no highlights
-- Footer: "Mark as Destroyed", "⚔ Set as Attacker", "🛡 Set as Defender"
+- Footer: "Mark as Destroyed", "⚔ Set as Attacking Unit", "🛡 Set as Target Unit"
 - Close button: `onClick`; scrim and designation buttons: `onClick`
 - Ability/keyword popups: `AbilityPopup` at `z-[70]`
 - `CompositionAccordion` exported from `UnitPopOut.jsx` for reuse in `CombatOverlay.jsx`
@@ -244,7 +244,7 @@ Three card states, all rendered as `fixed` overlays above all panels:
 - **Single card active**: `CombatOverlay` renders `fixed inset-0 z-50 bg-black/75 backdrop-blur-sm` (same scrim as other overlays); both source and target panels are elevated to `z-[60]` via `(elevated || chipData)` on the panel root; source panel has an inner `absolute inset-0 bg-black/75 backdrop-blur-sm z-10` overlay to visually match the scrim (panel content behind the chip appears covered); chip sits at `z-20` above the inner overlay; target panel has no inner overlay — fully visible and tappable; `chipData` prop (`{ displayName, role }`) passed from `ArmyTab` to the source panel; target panel shows its `pendingRole` prompt bar
 - **Both cards active**: `z-50` scrim (`onClick → clearCombatUnits()`); cards in `fixed inset-0 z-[60] flex py-12 px-3 gap-3 pointer-events-none` container; each card wrapper `w-1/2 pointer-events-auto`; `attackerIsLeft` determined by comparing `attackerUnit.rosterLabel` with `attackerRosterLabel`
 - Attacker card: red left border; full content — neutral stat row (all 6), ranged + melee weapon tables, Abilities/Rules section, Composition accordion
-- Defender card: green left border; giant T + Sv + W boxes (`text-5xl`, in that order); M/Ld/OC smaller below in `grid-cols-3`; attached leader secondary stats row in amber (`— [Leader Name]` + compact M/T/Sv/W/Ld/OC); abilities section
+- Defender card (v1.12): green left border; fixed header shows a per-model-type table — columns: Name × remaining | M | T | Sv | W | Ld | OC | InvSv | FNP | +/✕; bodyguard rows first, leader rows appended (amber text); T column highlighted in success colour; InvSv in amber-400, FNP in blue-400 when present; ✕ calls `removeCasualty`; "+" calls `addCasualty` (disabled at 0 casualties, green); row goes `opacity-40 line-through` at 0 remaining; scrollable body has Abilities/Rules section. `resolveUnit()` returns `bodyguardKey` (`${rosterLabel}:${unitIndex}`) and `leaderKey`. `getEffectiveProfiles()` synthesises a single entry from `unit.stats` for legacy rosters lacking `modelProfiles`.
 - Cards use `max-h-[calc(100vh-6rem)]` (matches `py-12` container padding)
 - Each card's × button: `onClick`; clears only that designation (layout shift on close → `onClick` prevents tap-through)
 
@@ -253,6 +253,7 @@ Three card states, all rendered as `fixed` overlays above all panels:
 - Persisted via `partialize` (included in `...rest`); excluded from `saveSnapshot` (not in snapshot object)
 - Actions: `setAttackerUnit(payload)`, `setDefenderUnit(payload)`, `clearCombatUnits()`
 - `resetGame` spreads `initialState` then explicitly sets both to `null`
+- `casualties: {}` (v1.11): flat map keyed `${rosterLabel}:${unitIndex}:${profileId}` → removed count; resets with game (in `initialState`); persisted via `partialize`; mutated by `removeCasualty(unitKey, profileId, maxCount)` (increments, clamped at maxCount) and `addCasualty(unitKey, profileId)` (decrements, clamped at 0)
 
 ### Leader Attachment (v1.7.2)
 
@@ -284,6 +285,8 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 - Weapons: recursive walk of `selections`, collect by `typeName`, de-dupe by name, sum `count`
 - Points: recursive sum of `costs` (name === "pts") across unit and all descendants
 - Multi-model fallback: if no Unit profile at top level, falls back to `collectProfiles(sel, 'Unit')[0]`
+- **`modelProfiles`** (v1.11): array of `{ id, name, count, stats, invuln, fnp }` — one entry per distinct model type (e.g. Beast Snagga Boy × 9, Beast Snagga Nob × 1); single-model units produce exactly one entry. `invuln` (v1.12) detected primarily from Abilities profile names matching `"Invulnerable Save (X+)"` → stored as `"5+"`; bare `^\d+\+\+$` kept as fallback. `fnp` detected from rule/ability names matching `/Feel No Pain (\d+\+)/i`. Both checked per-model then falling back to unit-level. Added by `getModelProfiles()`, `extractInvuln()`, `extractFnp()` helpers.
+- **`sources`** (v1.12): each weapon entry in `unit.ranged` / `unit.melee` now has `sources: [{ profileId, qty }]` where `profileId` matches `modelProfiles[].id` and `qty` = model count in that group. Built by `collectWeaponsWithSources()`. `count` = sum of source `qty` values. Used by `AttackerCard` to recompute remaining weapon quantities as models are killed. Legacy rosters (imported before v1.12) lack `sources` and display original quantities unchanged.
 
 ### Wahapedia HTML Rendering
 
@@ -342,6 +345,9 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.9.0 | Wahapedia integration — CSV data layer (`src/data/csv/`); `useArmyRuleData` hook for faction/detachment matching; Army Rule & Stratagems modals (`ArmyRuleModal`, `StratagemsModal`, `RulesAccordion`, `StratagemCard`); `deduplicateByName` utility; HTML formatting preserved via `renderWahapediaHtml` + `.wh-content` | ✅ Done |
 | v1.9.1 | Cross-faction ability bleed fix — `useArmyRuleData` excludes ability IDs that appear under any other faction, preventing cross-tagged rows (e.g. Synapse, Shadow in the Warp) from showing in the wrong Army Rule modal | ✅ Done |
 | v1.10.0 | Setup screen rework — faction/detachment dropdowns replaced with per-player `RosterPickerModal`; `gameStore` gains `rosters`, `rostersLoaded`, `player1RosterLabel`, `player2RosterLabel`, `fetchRosters`, `selectRoster`, `setRosters`; roster list shared between Setup and Army tab via store; `ArmyTab` consumes store rosters with no-double-fetch guard | ✅ Done |
+| v1.10.1 | Army tab weapon table fix — A/D column clipping in CombatOverlay Attacker card resolved; `WeaponTable` gains `compact` prop that widens stat columns (7–10%) and trims Name/Keywords for half-screen combat cards; panel ordering fix reverted pending further analysis | ✅ Done |
+| v1.11.0 | Defender card: per-model-type defensive stat table (Name/M/T/Sv/W/Ld/OC/InvSv/FNP/✕) replaces single highlighted stat block; leader profiles appended as amber rows; casualty tracking via `removeCasualty` in store (`casualties: {}` resets with game); eliminated rows grey out and strike through. Parser extended with `modelProfiles`, `extractInvuln`, `extractFnp`, `getModelProfiles` — required real parser changes since per-model stats, invuln, and FNP were not previously captured. Legacy rosters (no `modelProfiles`) fall back to a single synthesised entry from `unit.stats`. Attacker card unchanged. | ✅ Done |
+| v1.12.0 | **InvSv fix**: `extractInvuln` now primarily matches `"Invulnerable Save (5+)"` ability profile names (actual NewRecruit format) and returns e.g. `"5+"`; bare `^\d+\+\+$` kept as fallback. Inline invuln check in `parseUnit` updated to call `extractInvuln`; ability chip filter updated to exclude `Invulnerable Save (X+)` entries. **Add-model-back button**: `addCasualty` action in store decrements casualty count clamped at 0; Defender table gains a "+" button per row (disabled at 0 casualties) alongside the existing "✕". **Weapon-casualty sync**: parser gains `collectWeaponsWithSources` — each weapon entry now has `sources: [{ profileId, qty }]` attributing it to the model group(s) that carry it (profileId matches `modelProfiles[].id`); `count` = sum of source qty values. `AttackerCard` subscribes to `casualties` and recomputes each weapon's remaining quantity via `recomputeWeaponQuantities`; weapons at 0 remaining get `_depleted: true`. `WeaponTable` applies `opacity-40 line-through` to depleted rows. Legacy rosters (no `sources`) pass through unchanged. | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -349,9 +355,9 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 ## Current Progress
 
-**Last updated:** 10/05/2026
+**Last updated:** 18/06/2026
 
-**Status:** v1.10.0 complete. Setup screen reworked: faction/detachment dropdowns replaced with a per-player `RosterPickerModal`. Roster list is now shared Zustand state (`rosters`, `rostersLoaded`) fetched once from KV (or localStorage fallback). `selectRoster(player, roster)` writes `faction`, `detachment`, and roster label to the store. Army tab reads rosters from the store; upload in both Army tab and picker modal keeps the store in sync.
+**Status:** v1.12.0 complete. Three bundled fixes: InvSv now correctly extracted from "Invulnerable Save (5+)" ability profile names; Defender table has a "+" undo-casualty button per row; Attacker weapon tables are casualty-aware — weapon rows grey out/strike through as the model groups carrying them are killed. Re-import rosters to pick up `sources` on weapon entries; legacy rosters show original quantities unchanged.
 
 ---
 
@@ -361,13 +367,12 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 1. **Mission card switcher** — allow changing the active primary mission mid-game
 
+2. **Army tab panel ordering** — left panel should be the first player (set by roll-off), right panel the second player, matching TrackerTab/PhasesTab/FactionsTab. A simple `firstPlayerNum`/`secondPlayerNum` swap was tried (v1.10.1) and reverted — the interaction with `attackerNum`-keyed selection state (`selection.attacker`/`selection.defender`), `pKey` (`p1`/`p2`), attachment storage, and the CombatOverlay `attackerRosterLabel` prop needs a more careful rework before re-applying.
+
 ---
 
 ### Deferred to v2+
 
-- Custom ability editing
 - Match history export
-- Asymmetric War mode
 - Challenger card tracker (rules documented but no trigger logic, draw logic, or scoring exists in the codebase yet)
 - Wound roll matrix (S vs T pre-computed)
-- Filtering units by phase (show only melee weapons in Fight Phase)

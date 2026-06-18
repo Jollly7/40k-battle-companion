@@ -38,24 +38,29 @@ export function KeywordTokens({ keywords, rules, onKeywordClick }) {
 export function WeaponTable({ weapons, wsKey, rules, onKeywordClick }) {
   if (!weapons || weapons.length === 0) return null;
   const isRanged = wsKey === 'BS';
+  const nameW     = 'w-[24%]';
+  const rangeW    = 'w-[9%]';
+  const statW     = 'w-[7%]';
+  const wideStatW = 'w-[10%]'; // A, D — wider to fit "D6+1"-style values
+  const keywordW  = 'w-[26%]';
   return (
     <table className="w-full text-xs border-collapse mt-2 table-fixed">
       <thead>
         <tr className="border-b border-border-subtle">
-          <th className="w-[30%] text-left pb-1 pr-2 font-normal text-white/40">Name</th>
-          {isRanged ? <th className="w-[10%] pb-1 px-1 font-normal text-white/40 text-center">Range</th> : <th className="w-[10%]" />}
-          <th className="w-[4%] pb-1 px-1 font-normal text-white/40 text-center">A</th>
-          <th className="w-[4%] pb-1 px-1 font-normal text-white/40 text-center">{wsKey}</th>
-          <th className="w-[4%] pb-1 px-1 font-normal text-white/40 text-center">S</th>
-          <th className="w-[4%] pb-1 px-1 font-normal text-white/40 text-center">AP</th>
-          <th className="w-[4%] pb-1 px-1 font-normal text-white/40 text-center">D</th>
-          <th className="pb-1 pl-2 font-normal text-white/40 text-left w-[40%]">Keywords</th>
+          <th className={`${nameW} text-left pb-1 pr-2 font-normal text-white/40`}>Name</th>
+          {isRanged ? <th className={`${rangeW} pb-1 px-1 font-normal text-white/40 text-center`}>Range</th> : <th className={rangeW} />}
+          <th className={`${wideStatW} pb-1 px-1 font-normal text-white/40 text-center`}>A</th>
+          <th className={`${statW} pb-1 px-1 font-normal text-white/40 text-center`}>{wsKey}</th>
+          <th className={`${statW} pb-1 px-1 font-normal text-white/40 text-center`}>S</th>
+          <th className={`${statW} pb-1 px-1 font-normal text-white/40 text-center`}>AP</th>
+          <th className={`${wideStatW} pb-1 px-1 font-normal text-white/40 text-center`}>D</th>
+          <th className={`pb-1 pl-2 font-normal text-white/40 text-left ${keywordW}`}>Keywords</th>
         </tr>
       </thead>
       <tbody>
         {weapons.map((w, i) => (
-          <tr key={i} className="border-b border-border-subtle last:border-0">
-            <td className={`py-1 pr-2 break-words ${w._isLeader ? 'text-amber-400' : 'text-text-primary'}`}>
+          <tr key={i} className={`border-b border-border-subtle last:border-0 ${w._depleted ? 'opacity-40' : ''}`}>
+            <td className={`py-1 pr-2 break-words ${w._depleted ? 'line-through' : ''} ${w._isLeader ? 'text-amber-400' : 'text-text-primary'}`}>
               {w.name}{w.count > 1 && <span className="text-text-muted ml-1">(x{w.count})</span>}
             </td>
             {isRanged ? <td className="py-1 px-1 text-center text-text-secondary tabular-nums">{w.range}</td> : <td />}
@@ -361,13 +366,13 @@ export function UnitPopOut({ unit, displayName, leader, rules, roleAccent, isDea
               onClick={() => onSetAttacker?.()}
               className="flex-1 min-w-[120px] text-xs px-3 py-2 rounded border border-danger/60 text-danger hover:bg-danger/10 transition-colors min-h-[48px]"
             >
-              ⚔ Set as Attacker
+              ⚔ Set as Attacking Unit
             </button>
             <button
               onClick={() => onSetDefender?.()}
               className="flex-1 min-w-[120px] text-xs px-3 py-2 rounded border border-success/60 text-success hover:bg-success/10 transition-colors min-h-[48px]"
             >
-              🛡 Set as Defender
+              🛡 Set as Target Unit
             </button>
           </div>
         </div>

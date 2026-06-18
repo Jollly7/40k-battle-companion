@@ -64,6 +64,7 @@ const initialState = {
   log: [],     // array of { message, timestamp } action log entries
   attackerUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
   defenderUnit: null, // { rosterLabel, unitIndex, leaderUnitIndex, displayName, leaderDisplayName } | null
+  casualties: {},     // { [`${rosterLabel}:${unitIndex}:${profileId}`]: removedCount }
   player1RosterLabel: null,
   player2RosterLabel: null,
 };
@@ -359,6 +360,21 @@ export const useGameStore = create(
   setAttackerUnit: (payload) => set({ attackerUnit: payload }),
   setDefenderUnit: (payload) => set({ defenderUnit: payload }),
   clearCombatUnits: () => set({ attackerUnit: null, defenderUnit: null }),
+
+  // --- Casualty tracking ---
+  removeCasualty: (unitKey, profileId, maxCount) => set((s) => {
+    const key = `${unitKey}:${profileId}`;
+    const current = s.casualties[key] ?? 0;
+    if (current >= maxCount) return {};
+    return { casualties: { ...s.casualties, [key]: current + 1 } };
+  }),
+
+  addCasualty: (unitKey, profileId) => set((s) => {
+    const key = `${unitKey}:${profileId}`;
+    const current = s.casualties[key] ?? 0;
+    if (current <= 0) return {};
+    return { casualties: { ...s.casualties, [key]: current - 1 } };
+  }),
 
   // --- Undo ---
   undo: () => {

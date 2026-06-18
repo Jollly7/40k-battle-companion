@@ -100,6 +100,89 @@ function collectProfiles(selection, typeName) {
   return results;
 }
 
+/** Extract the invuln save string from a selection tree (e.g. "5+").
+ *  Primary: profile name "Invulnerable Save (5+)" → returns "5+".
+ *  Fallback: bare "5++" name → returns "5++". */
+function extractInvuln(sel) {
+  for (const { profile: ap } of collectAbilityProfilesWithFlags(sel)) {
+    const name = (ap.name ?? '').trim();
+    const m = name.match(/^Invulnerable Save \((\d+\+)\)$/i);
+    if (m) return m[1];
+    if (/^\d+\+\+$/.test(name)) return name;
+  }
+  return null;
+}
+
+/** Extract Feel No Pain value (e.g. "6+") from rule/ability names in a selection tree. */
+function extractFnp(sel) {
+  const rules = collectRules(sel);
+  for (const name of Object.keys(rules)) {
+    const m = name.match(/Feel No Pain (\d+\+)/i);
+    if (m) return m[1];
+  }
+  for (const { profile: ap } of collectAbilityProfilesWithFlags(sel)) {
+    const m = (ap.name ?? '').match(/Feel No Pain (\d+\+)/i);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Build a modelProfiles array for a unit selection.
+ * Each entry represents a distinct model type with its own stats, invuln, and FNP.
+ * For single-model units (no model-typed children) returns one entry using the unit itself.
+ */
+function getModelProfiles(unitSel) {
+  const unitInvuln = extractInvuln(unitSel);
+  const unitFnp = extractFnp(unitSel);
+  const models = getSelections(unitSel).filter(s => s.type === 'model');
+  if (models.length === 0) {
+    const unitProfile =
+      getProfiles(unitSel).find(p => p.typeName === 'Unit') ??
+      collectProfiles(unitSel, 'Unit')[0];
+    if (!unitProfile) return [];
+    const chars = unitProfile.characteristics;
+    return [{
+      id: unitSel.name ?? 'unit',
+      name: unitSel.name ?? 'Unit',
+      count: parseInt(unitSel.number ?? '1', 10) || 1,
+      stats: {
+        M: getChar(chars, 'M') ?? '-',
+        T: coerce(getChar(chars, 'T') ?? '-'),
+        SV: getChar(chars, 'SV') ?? '-',
+        W: coerce(getChar(chars, 'W') ?? '-'),
+        LD: getChar(chars, 'LD') ?? '-',
+        OC: coerce(getChar(chars, 'OC') ?? '-'),
+      },
+      invuln: unitInvuln,
+      fnp: unitFnp,
+    }];
+  }
+  return models.map(model => {
+    const unitProfile =
+      getProfiles(model).find(p => p.typeName === 'Unit') ??
+      collectProfiles(model, 'Unit')[0];
+    if (!unitProfile) return null;
+    const chars = unitProfile.characteristics;
+    const count = parseInt(model.number ?? '1', 10) || 1;
+    return {
+      id: model.name ?? 'model',
+      name: model.name ?? 'Model',
+      count,
+      stats: {
+        M: getChar(chars, 'M') ?? '-',
+        T: coerce(getChar(chars, 'T') ?? '-'),
+        SV: getChar(chars, 'SV') ?? '-',
+        W: coerce(getChar(chars, 'W') ?? '-'),
+        LD: getChar(chars, 'LD') ?? '-',
+        OC: coerce(getChar(chars, 'OC') ?? '-'),
+      },
+      invuln: extractInvuln(model) ?? unitInvuln,
+      fnp: extractFnp(model) ?? unitFnp,
+    };
+  }).filter(Boolean);
+}
+
 /**
  * Collect all Abilities profiles from a selection tree, tagging each with
  * `isEnhancement: true` when the profile lives inside an Enhancement selection.
@@ -153,6 +236,50 @@ function collectWeapons(selection, typeName, acc = new Map()) {
     collectWeapons(child, typeName, acc);
   }
   return acc;
+}
+
+/**
+ * Build ranged and melee weapon arrays for a unit, attributing each weapon entry
+ * to the model group(s) that carry it via a `sources` array.
+ * `sources: [{ profileId, qty }]` where profileId matches modelProfiles[].id
+ * and qty is the number of models in that group carrying the weapon.
+ * The total `count` on each entry equals the sum of its sources' qty values.
+ */
+function collectWeaponsWithSources(unitSel) {
+  const models = getSelections(unitSel).filter(s => s.type === 'model');
+  const rangedMap = new Map();
+  const meleeMap  = new Map();
+
+  function mergeGroup(container, profileId, qty) {
+    for (const [name, entry] of collectWeapons(container, 'Ranged Weapons')) {
+      if (rangedMap.has(name)) {
+        const e = rangedMap.get(name);
+        e.count += qty;
+        e.sources.push({ profileId, qty });
+      } else {
+        rangedMap.set(name, { ...entry, count: qty, sources: [{ profileId, qty }] });
+      }
+    }
+    for (const [name, entry] of collectWeapons(container, 'Melee Weapons')) {
+      if (meleeMap.has(name)) {
+        const e = meleeMap.get(name);
+        e.count += qty;
+        e.sources.push({ profileId, qty });
+      } else {
+        meleeMap.set(name, { ...entry, count: qty, sources: [{ profileId, qty }] });
+      }
+    }
+  }
+
+  if (models.length === 0) {
+    mergeGroup(unitSel, unitSel.name ?? 'unit', parseInt(unitSel.number ?? '1', 10) || 1);
+  } else {
+    for (const model of models) {
+      mergeGroup(model, model.name ?? 'model', parseInt(model.number ?? '1', 10) || 1);
+    }
+  }
+
+  return { ranged: [...rangedMap.values()], melee: [...meleeMap.values()] };
 }
 
 /**
@@ -234,25 +361,18 @@ function parseUnit(sel) {
     OC: coerce(getChar(chars, 'OC') ?? '-'),
   };
 
-  // Invuln save: Abilities profile whose name matches /^\d+\+\+$/
   const allAbilityEntries = collectAbilityProfilesWithFlags(sel);
-  for (const { profile: ap } of allAbilityEntries) {
-    if (/^\d+\+\+$/.test((ap.name ?? '').trim())) {
-      stats.invuln = ap.name.trim();
-      break;
-    }
-  }
+  stats.invuln = extractInvuln(sel);
 
-  // Weapons
-  const ranged = [...collectWeapons(sel, 'Ranged Weapons').values()];
-  const melee = [...collectWeapons(sel, 'Melee Weapons').values()];
+  // Weapons (with per-model-group source attribution for casualty-aware display)
+  const { ranged, melee } = collectWeaponsWithSources(sel);
 
   // Abilities (deduped, excluding invuln saves)
   const seen = new Set();
   const abilities = [];
   for (const { profile: ap, isEnhancement } of allAbilityEntries) {
     const n = (ap.name ?? '').trim();
-    if (/^\d+\+\+$/.test(n)) continue;
+    if (/^\d+\+\+$/.test(n) || /^Invulnerable Save \(\d+\+\)$/i.test(n)) continue;
     if (seen.has(n)) continue;
     seen.add(n);
     const desc = getChar(ap.characteristics, 'Description') ?? '';
@@ -280,6 +400,7 @@ function parseUnit(sel) {
     .sort();
 
   const composition = getComposition(sel);
+  const modelProfiles = getModelProfiles(sel);
 
   // Points: recursive sum across unit and all descendants (includes enhancement upgrades)
   const pts = Math.round(sumPts(sel)) || 0;
@@ -308,7 +429,7 @@ function parseUnit(sel) {
     }
   }
 
-  return { name, stats, ranged, melee, abilities, unitRules, keywords, composition, isCharacter, leaderOf, pts };
+  return { name, stats, ranged, melee, abilities, unitRules, keywords, composition, modelProfiles, isCharacter, leaderOf, pts };
 }
 
 /**
