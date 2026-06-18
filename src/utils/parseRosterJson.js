@@ -339,6 +339,63 @@ function sumPts(selection) {
   return own + children;
 }
 
+/**
+ * Mutates modelProfile names in-place to disambiguate same-name rows that carry
+ * different weapons (e.g. two "w/ Heavy Weapon ×2" groups — one with Seismic cannon,
+ * one with Mining laser — that are otherwise visually identical in the Defender table).
+ *
+ * Algorithm:
+ *  1. Collect a weapon-name Set per model selection, positionally matched to modelProfiles
+ *     (applying the same null-profile filter that getModelProfiles uses).
+ *  2. Compute the intersection = weapons shared by every profile (shared/default loadout).
+ *  3. For each profile: distinguishing = own_weapons − common_weapons, then exclude any
+ *     weapon whose name is a case-insensitive substring of the profile's base name
+ *     (avoids redundant labels like "w/ Hybrid Firearm (Hybrid firearm)").
+ *  4. If distinguishing weapons remain, append "(Weapon A, Weapon B)" to the name.
+ *
+ * Only `name` is mutated; `id`, `count`, `stats`, `invuln`, `fnp`, and `sources` are untouched.
+ */
+function disambiguateModelProfileNames(unitSel, modelProfiles) {
+  if (modelProfiles.length <= 1) return;
+
+  const models = getSelections(unitSel).filter(s => s.type === 'model');
+  if (models.length === 0) return; // single-model unit — nothing to do
+
+  // Build a weapon-name Set per model, skipping models that lack a Unit profile
+  // (mirrors the null-filter in getModelProfiles to keep positional alignment).
+  const weaponSets = [];
+  for (const model of models) {
+    const hasProfile =
+      getProfiles(model).find(p => p.typeName === 'Unit') ??
+      collectProfiles(model, 'Unit')[0];
+    if (!hasProfile) continue;
+    const ranged = collectWeapons(model, 'Ranged Weapons');
+    const melee  = collectWeapons(model, 'Melee Weapons');
+    weaponSets.push(new Set([...ranged.keys(), ...melee.keys()]));
+  }
+
+  // If filtering produced a different count the shapes are mismatched — skip safely.
+  if (weaponSets.length !== modelProfiles.length) return;
+
+  // Common weapons = intersection across all profiles (shared/default loadout).
+  const commonWeapons = weaponSets.reduce(
+    (acc, set) => new Set([...acc].filter(w => set.has(w))),
+    new Set(weaponSets[0])
+  );
+
+  for (let i = 0; i < modelProfiles.length; i++) {
+    const mp = modelProfiles[i];
+    const baseName = mp.name.toLowerCase();
+    const distinguishing = [...weaponSets[i]]
+      .filter(w => !commonWeapons.has(w))
+      .filter(w => !baseName.includes(w.toLowerCase()))
+      .sort();
+    if (distinguishing.length > 0) {
+      mp.name = `${mp.name} (${distinguishing.join(', ')})`;
+    }
+  }
+}
+
 /** Parse a single unit selection into the internal unit shape. */
 function parseUnit(sel) {
   const name = sel.name ?? 'Unknown Unit';
@@ -401,6 +458,7 @@ function parseUnit(sel) {
 
   const composition = getComposition(sel);
   const modelProfiles = getModelProfiles(sel);
+  disambiguateModelProfileNames(sel, modelProfiles);
 
   // Points: recursive sum across unit and all descendants (includes enhancement upgrades)
   const pts = Math.round(sumPts(sel)) || 0;
