@@ -354,6 +354,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.12.3 | **CombatOverlay portrait/landscape layout**: `bothActive` branch detects orientation via `window.innerWidth < window.innerHeight`; portrait renders a `flex-col` container with attacker card always on top (`flex-[3]`) and defender always below (`flex-[1]`), both full-width, independently scrollable; landscape retains the existing side-by-side `flex` row with `attackerIsLeft` ordering unchanged. Single-card scrim-only path untouched. | ✅ Done |
 | v1.12.4 | **11th Edition parser compatibility**: `getStat()` helper introduced — all Unit profile characteristic lookups are now case-insensitive, fixing `Sv` vs `SV` casing change in 11th Ed exports. `extractInvuln()` updated to read native `InSv` characteristic from Unit profile as primary source (value `"-"` treated as absent); existing ability-text fallback (`"Invulnerable Save (X+)"` and bare `\d++` patterns) retained for 10th Ed roster compatibility. Both old and new format rosters work without re-import. | ✅ Done |
 | v1.12.5 | **`rostersLoaded` persistence fix**: excluded `rostersLoaded` from Zustand `partialize`. Previously, rehydration set `rostersLoaded: true`, causing `SetupScreen`'s `useEffect` guard to block `fetchRosters()` forever — tablet always showed stale localStorage rosters. Principle: any boolean used as a fetch guard must not be persisted, or it permanently suppresses the fetch after the first session. | ✅ Done |
+| v1.12.6 | **HTTP cache fix for roster API**: `GET /api/rosters` now sets `Cache-Control: no-store`. Previously, Cloudflare Pages Functions returned no caching headers, so browsers applied heuristic caching — devices served stale roster lists after a new upload until the user cleared site data. Principle: Pages Functions set no `Cache-Control` by default; any dynamic API endpoint must explicitly set `no-store` or browsers may cache and serve stale responses. | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -363,7 +364,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 **Last updated:** 24/06/2026
 
-**Status:** v1.12.5 complete. `rostersLoaded` excluded from Zustand persistence — the store now always rehydrates with `rostersLoaded: false`, so `fetchRosters()` always fires on first mount and picks up new rosters from KV.
+**Status:** v1.12.6 complete. `GET /api/rosters` now returns `Cache-Control: no-store` — browsers will always fetch fresh roster data from the network rather than serving a heuristically-cached response.
 
 ---
 

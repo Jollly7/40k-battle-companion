@@ -12,12 +12,13 @@ export async function onRequest({ request, env }) {
   }
 
   if (method === 'GET') {
+    const GET_HEADERS = { ...CORS_HEADERS, 'Cache-Control': 'no-store' };
     try {
       const stored = await env.ROSTERS.get('all_rosters');
       const rosters = stored ? JSON.parse(stored) : [];
-      return Response.json({ rosters }, { headers: CORS_HEADERS });
+      return Response.json({ rosters }, { headers: GET_HEADERS });
     } catch {
-      return Response.json({ error: 'Failed to read rosters' }, { status: 500, headers: CORS_HEADERS });
+      return Response.json({ error: 'Failed to read rosters' }, { status: 500, headers: GET_HEADERS });
     }
   }
 
