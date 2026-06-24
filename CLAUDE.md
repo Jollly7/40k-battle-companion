@@ -353,6 +353,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.12.2 | **Recursive model-type anchoring**: parser gains `findUnitProfileAnchors(unitSel)` — recursively walks a unit's selection tree to locate every node that directly owns a `Unit`-typeName profile, stopping descent at each anchor (its subtree is weapons/wargear, not further model groups). Fixes Squighog Boyz (and any unit where model-type nodes are nested inside an intermediate `type: "upgrade"` wrapper) producing zero Defender card rows. `getModelProfiles`, `getComposition`, `collectWeaponsWithSources`, and `disambiguateModelProfileNames` all refactored to call the shared helper instead of the non-recursive `getSelections(unitSel).filter(s => s.type === 'model')` scan. No output-shape changes; single-model fallback and all existing unit types unaffected. Re-import rosters to pick up correct model profiles. | ✅ Done |
 | v1.12.3 | **CombatOverlay portrait/landscape layout**: `bothActive` branch detects orientation via `window.innerWidth < window.innerHeight`; portrait renders a `flex-col` container with attacker card always on top (`flex-[3]`) and defender always below (`flex-[1]`), both full-width, independently scrollable; landscape retains the existing side-by-side `flex` row with `attackerIsLeft` ordering unchanged. Single-card scrim-only path untouched. | ✅ Done |
 | v1.12.4 | **11th Edition parser compatibility**: `getStat()` helper introduced — all Unit profile characteristic lookups are now case-insensitive, fixing `Sv` vs `SV` casing change in 11th Ed exports. `extractInvuln()` updated to read native `InSv` characteristic from Unit profile as primary source (value `"-"` treated as absent); existing ability-text fallback (`"Invulnerable Save (X+)"` and bare `\d++` patterns) retained for 10th Ed roster compatibility. Both old and new format rosters work without re-import. | ✅ Done |
+| v1.12.5 | **`rostersLoaded` persistence fix**: excluded `rostersLoaded` from Zustand `partialize`. Previously, rehydration set `rostersLoaded: true`, causing `SetupScreen`'s `useEffect` guard to block `fetchRosters()` forever — tablet always showed stale localStorage rosters. Principle: any boolean used as a fetch guard must not be persisted, or it permanently suppresses the fetch after the first session. | ✅ Done |
 
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
@@ -362,7 +363,7 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 
 **Last updated:** 24/06/2026
 
-**Status:** v1.12.4 complete. Parser now handles 11th Edition NewRecruit exports: `getStat()` helper makes all Unit profile characteristic lookups case-insensitive (`Sv`/`SV` both work); `extractInvuln()` reads native `InSv` characteristic first (11th Ed), falls back to ability-text patterns for 10th Ed rosters. No re-import needed for existing rosters.
+**Status:** v1.12.5 complete. `rostersLoaded` excluded from Zustand persistence — the store now always rehydrates with `rostersLoaded: false`, so `fetchRosters()` always fires on first mount and picks up new rosters from KV.
 
 ---
 

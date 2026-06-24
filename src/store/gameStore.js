@@ -390,7 +390,9 @@ export const useGameStore = create(
       version: 1,
       // Exclude undo history (ephemeral) from persistence.
       // timerPaused is also excluded so it always rehydrates as true (see onRehydrateStorage).
-      partialize: ({ history, timerPaused, timerStartedAt, ...rest }) => rest,
+      // rostersLoaded excluded so the fetch guard never trips on rehydration — a persisted true
+      // would permanently suppress fetchRosters() after the first session.
+      partialize: ({ history, timerPaused, timerStartedAt, rostersLoaded, ...rest }) => rest,
       // After rehydration, force timers paused and clear any stale anchor.
       onRehydrateStorage: () => (state) => {
         if (state) { state.timerPaused = true; state.timerStartedAt = null; }
