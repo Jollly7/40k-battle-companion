@@ -88,6 +88,15 @@ function getChar(characteristics, name) {
   return found?.$text ?? null;
 }
 
+/** Case-insensitive characteristic lookup — covers stat name casing drift between editions. */
+function getStat(characteristics, name) {
+  const chars = Array.isArray(characteristics)
+    ? characteristics
+    : toArray(characteristics?.characteristic);
+  const lower = name.toLowerCase();
+  return chars.find(c => c.name?.toLowerCase() === lower)?.$text ?? null;
+}
+
 /** Collect all profiles of a given typeName from a selection tree (recursive). */
 function collectProfiles(selection, typeName) {
   const results = [];
@@ -100,10 +109,14 @@ function collectProfiles(selection, typeName) {
   return results;
 }
 
-/** Extract the invuln save string from a selection tree (e.g. "5+").
- *  Primary: profile name "Invulnerable Save (5+)" → returns "5+".
- *  Fallback: bare "5++" name → returns "5++". */
-function extractInvuln(sel) {
+/** Extract the invuln save string from a selection (e.g. "5+").
+ *  Primary (11th Ed): reads InSv characteristic from the Unit profile chars when provided.
+ *  Fallback (10th Ed): profile name "Invulnerable Save (5+)" → returns "5+"; bare "5++" → "5++". */
+function extractInvuln(sel, chars = null) {
+  if (chars != null) {
+    const inSv = getStat(chars, 'InSv');
+    if (inSv && inSv !== '-') return inSv;
+  }
   for (const { profile: ap } of collectAbilityProfilesWithFlags(sel)) {
     const name = (ap.name ?? '').trim();
     const m = name.match(/^Invulnerable Save \((\d+\+)\)$/i);
@@ -128,15 +141,44 @@ function extractFnp(sel) {
 }
 
 /**
+ * Recursively find all nodes in a unit selection's subtree that directly own
+ * a Unit-typeName profile. Once a node is identified as an anchor, its children
+ * are not searched further — they belong to that model type's weapons/wargear,
+ * not to a sibling model group.
+ *
+ * Handles units where model-type nodes are nested inside an intermediate
+ * upgrade wrapper rather than sitting as direct children of the unit selection
+ * (confirmed case: Ork Squighog Boyz).
+ *
+ * Returns [] when no anchors are found — callers treat this as the single-model
+ * case and use the unit selection itself as the implicit anchor.
+ */
+function findUnitProfileAnchors(unitSel) {
+  const anchors = [];
+  function walk(node) {
+    if (getProfiles(node).find(p => p.typeName === 'Unit')) {
+      anchors.push(node);
+      return; // stopping condition: don't recurse into this anchor's children
+    }
+    for (const child of getSelections(node)) {
+      walk(child);
+    }
+  }
+  for (const child of getSelections(unitSel)) {
+    walk(child);
+  }
+  return anchors;
+}
+
+/**
  * Build a modelProfiles array for a unit selection.
  * Each entry represents a distinct model type with its own stats, invuln, and FNP.
  * For single-model units (no model-typed children) returns one entry using the unit itself.
  */
 function getModelProfiles(unitSel) {
-  const unitInvuln = extractInvuln(unitSel);
   const unitFnp = extractFnp(unitSel);
-  const models = getSelections(unitSel).filter(s => s.type === 'model');
-  if (models.length === 0) {
+  const anchors = findUnitProfileAnchors(unitSel);
+  if (anchors.length === 0) {
     const unitProfile =
       getProfiles(unitSel).find(p => p.typeName === 'Unit') ??
       collectProfiles(unitSel, 'Unit')[0];
@@ -147,38 +189,39 @@ function getModelProfiles(unitSel) {
       name: unitSel.name ?? 'Unit',
       count: parseInt(unitSel.number ?? '1', 10) || 1,
       stats: {
-        M: getChar(chars, 'M') ?? '-',
-        T: coerce(getChar(chars, 'T') ?? '-'),
-        SV: getChar(chars, 'SV') ?? '-',
-        W: coerce(getChar(chars, 'W') ?? '-'),
-        LD: getChar(chars, 'LD') ?? '-',
-        OC: coerce(getChar(chars, 'OC') ?? '-'),
+        M: getStat(chars, 'M') ?? '-',
+        T: coerce(getStat(chars, 'T') ?? '-'),
+        SV: getStat(chars, 'SV') ?? '-',
+        W: coerce(getStat(chars, 'W') ?? '-'),
+        LD: getStat(chars, 'LD') ?? '-',
+        OC: coerce(getStat(chars, 'OC') ?? '-'),
       },
-      invuln: unitInvuln,
+      invuln: extractInvuln(unitSel, chars),
       fnp: unitFnp,
     }];
   }
-  return models.map(model => {
+  const unitInvuln = extractInvuln(unitSel);
+  return anchors.map(anchor => {
     const unitProfile =
-      getProfiles(model).find(p => p.typeName === 'Unit') ??
-      collectProfiles(model, 'Unit')[0];
+      getProfiles(anchor).find(p => p.typeName === 'Unit') ??
+      collectProfiles(anchor, 'Unit')[0];
     if (!unitProfile) return null;
     const chars = unitProfile.characteristics;
-    const count = parseInt(model.number ?? '1', 10) || 1;
+    const count = parseInt(anchor.number ?? '1', 10) || 1;
     return {
-      id: model.name ?? 'model',
-      name: model.name ?? 'Model',
+      id: anchor.name ?? 'model',
+      name: anchor.name ?? 'Model',
       count,
       stats: {
-        M: getChar(chars, 'M') ?? '-',
-        T: coerce(getChar(chars, 'T') ?? '-'),
-        SV: getChar(chars, 'SV') ?? '-',
-        W: coerce(getChar(chars, 'W') ?? '-'),
-        LD: getChar(chars, 'LD') ?? '-',
-        OC: coerce(getChar(chars, 'OC') ?? '-'),
+        M: getStat(chars, 'M') ?? '-',
+        T: coerce(getStat(chars, 'T') ?? '-'),
+        SV: getStat(chars, 'SV') ?? '-',
+        W: coerce(getStat(chars, 'W') ?? '-'),
+        LD: getStat(chars, 'LD') ?? '-',
+        OC: coerce(getStat(chars, 'OC') ?? '-'),
       },
-      invuln: extractInvuln(model) ?? unitInvuln,
-      fnp: extractFnp(model) ?? unitFnp,
+      invuln: extractInvuln(anchor, chars) ?? unitInvuln,
+      fnp: extractFnp(anchor) ?? unitFnp,
     };
   }).filter(Boolean);
 }
@@ -246,7 +289,7 @@ function collectWeapons(selection, typeName, acc = new Map()) {
  * The total `count` on each entry equals the sum of its sources' qty values.
  */
 function collectWeaponsWithSources(unitSel) {
-  const models = getSelections(unitSel).filter(s => s.type === 'model');
+  const anchors = findUnitProfileAnchors(unitSel);
   const rangedMap = new Map();
   const meleeMap  = new Map();
 
@@ -271,11 +314,11 @@ function collectWeaponsWithSources(unitSel) {
     }
   }
 
-  if (models.length === 0) {
+  if (anchors.length === 0) {
     mergeGroup(unitSel, unitSel.name ?? 'unit', parseInt(unitSel.number ?? '1', 10) || 1);
   } else {
-    for (const model of models) {
-      mergeGroup(model, model.name ?? 'model', parseInt(model.number ?? '1', 10) || 1);
+    for (const anchor of anchors) {
+      mergeGroup(anchor, anchor.name ?? 'model', parseInt(anchor.number ?? '1', 10) || 1);
     }
   }
 
@@ -318,11 +361,11 @@ function getModelEquipment(modelSel, modelCount) {
  * Returns null for single-model units (type="model" at top level).
  */
 function getComposition(unitSel) {
-  const models = getSelections(unitSel).filter(s => s.type === 'model');
-  if (models.length > 0) {
-    return models.map(model => {
-      const count = parseInt(model.number ?? '1', 10);
-      return { name: model.name, count, equipment: getModelEquipment(model, count) };
+  const anchors = findUnitProfileAnchors(unitSel);
+  if (anchors.length > 0) {
+    return anchors.map(anchor => {
+      const count = parseInt(anchor.number ?? '1', 10);
+      return { name: anchor.name, count, equipment: getModelEquipment(anchor, count) };
     });
   }
   // Single-model unit — the selection itself is the model
@@ -358,19 +401,19 @@ function sumPts(selection) {
 function disambiguateModelProfileNames(unitSel, modelProfiles) {
   if (modelProfiles.length <= 1) return;
 
-  const models = getSelections(unitSel).filter(s => s.type === 'model');
-  if (models.length === 0) return; // single-model unit — nothing to do
+  const anchors = findUnitProfileAnchors(unitSel);
+  if (anchors.length === 0) return; // single-model unit — nothing to do
 
-  // Build a weapon-name Set per model, skipping models that lack a Unit profile
+  // Build a weapon-name Set per anchor, skipping anchors that lack a Unit profile
   // (mirrors the null-filter in getModelProfiles to keep positional alignment).
   const weaponSets = [];
-  for (const model of models) {
+  for (const anchor of anchors) {
     const hasProfile =
-      getProfiles(model).find(p => p.typeName === 'Unit') ??
-      collectProfiles(model, 'Unit')[0];
+      getProfiles(anchor).find(p => p.typeName === 'Unit') ??
+      collectProfiles(anchor, 'Unit')[0];
     if (!hasProfile) continue;
-    const ranged = collectWeapons(model, 'Ranged Weapons');
-    const melee  = collectWeapons(model, 'Melee Weapons');
+    const ranged = collectWeapons(anchor, 'Ranged Weapons');
+    const melee  = collectWeapons(anchor, 'Melee Weapons');
     weaponSets.push(new Set([...ranged.keys(), ...melee.keys()]));
   }
 
@@ -409,17 +452,17 @@ function parseUnit(sel) {
 
   const chars = unitProfile.characteristics;
   const stats = {
-    M: getChar(chars, 'M') ?? '-',
-    T: coerce(getChar(chars, 'T') ?? '-'),
-    SV: getChar(chars, 'SV') ?? '-',
+    M: getStat(chars, 'M') ?? '-',
+    T: coerce(getStat(chars, 'T') ?? '-'),
+    SV: getStat(chars, 'SV') ?? '-',
     invuln: null,
-    W: coerce(getChar(chars, 'W') ?? '-'),
-    LD: getChar(chars, 'LD') ?? '-',
-    OC: coerce(getChar(chars, 'OC') ?? '-'),
+    W: coerce(getStat(chars, 'W') ?? '-'),
+    LD: getStat(chars, 'LD') ?? '-',
+    OC: coerce(getStat(chars, 'OC') ?? '-'),
   };
 
   const allAbilityEntries = collectAbilityProfilesWithFlags(sel);
-  stats.invuln = extractInvuln(sel);
+  stats.invuln = extractInvuln(sel, chars);
 
   // Weapons (with per-model-group source attribution for casualty-aware display)
   const { ranged, melee } = collectWeaponsWithSources(sel);

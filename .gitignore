@@ -23,14 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 *.ros
-Tau Colosseum.json
-Grey Knight Colosseum.json
-Ork Colosseum.json
-GSC Colosseum.json
-2k.json
-First 1k irl Tau.json
-GSC_1k_Edge Maxxing.json
-Ork 1k.json
+1k (2).json 
+1k Doubles.json
 
 # archive files
 archive_*.md

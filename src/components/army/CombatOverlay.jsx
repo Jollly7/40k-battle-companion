@@ -106,7 +106,7 @@ function AttackerCard({ data, onClose }) {
       </div>
 
       {/* Scrollable body — full content, weapons first */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4">
         {combinedRanged.length > 0 && (
           <div>
             <div className="text-xs font-semibold tracking-widest uppercase border-l-2 border-blue-400 pl-2 text-blue-300 mb-1">Ranged</div>
@@ -161,9 +161,9 @@ function DefenderCard({ data, onClose }) {
       className="w-full max-w-[560px] max-h-[calc(100vh-6rem)] flex flex-col bg-surface-panel rounded-xl shadow-2xl border border-border-subtle border-l-4 border-l-success overflow-hidden"
       onClick={e => e.stopPropagation()}
     >
-      {/* Header */}
+      {/* Pinned header — name row only */}
       <div className="shrink-0 px-4 pt-3 pb-2 border-b border-border-subtle bg-surface-panel">
-        <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             {leaderDisplayName && (
               <div className="text-xs font-semibold text-amber-400 truncate">{leaderDisplayName}</div>
@@ -179,10 +179,13 @@ function DefenderCard({ data, onClose }) {
             ✕
           </button>
         </div>
+      </div>
 
-        {/* Per-model-type defensive stat table */}
+      {/* Scrollable body — stat table + abilities */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 pt-2 pb-3 space-y-4">
+        {/* Per-model-type defensive stat table with sticky column headers */}
         <table className="w-full text-[10px] border-collapse table-fixed">
-          <thead>
+          <thead className="sticky top-0 bg-surface-panel z-10">
             <tr className="border-b border-border-subtle">
               <th className="text-left pb-1 font-normal text-white/40 w-[20%]">Name</th>
               <th className="pb-1 px-0.5 font-normal text-white/40 text-center w-[7%]">M</th>
@@ -254,10 +257,7 @@ function DefenderCard({ data, onClose }) {
             })}
           </tbody>
         </table>
-      </div>
 
-      {/* Scrollable body — abilities focus */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
         <AbilitiesSection
           abilities={unit.abilities}
           unitRules={unit.unitRules}
@@ -291,6 +291,9 @@ export function CombatOverlay({ rosters, attackerRosterLabel }) {
   // Left = attacker panel (roster label matches attackerRosterLabel)
   const attackerIsLeft = attackerUnit?.rosterLabel === attackerRosterLabel;
 
+  // Stack vertically in portrait orientation, side-by-side in landscape
+  const isMobile = window.innerWidth < window.innerHeight;
+
   if (!bothActive) {
     return <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" onClick={clearCombatUnits} />;
   }
@@ -300,28 +303,40 @@ export function CombatOverlay({ rosters, attackerRosterLabel }) {
       {/* Scrim — only rendered when both cards are active */}
       <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm" onClick={clearCombatUnits} />
 
-      {/* Side-by-side cards, large top/bottom padding, small sides/gap */}
-      <div className="fixed inset-0 z-[60] flex items-center py-12 px-3 gap-3 pointer-events-none">
-        {attackerIsLeft ? (
-          <>
-            <div className="w-1/2 flex items-center justify-center pointer-events-auto">
-              {attackerData && <AttackerCard data={attackerData} onClose={() => setAttackerUnit(null)} />}
-            </div>
-            <div className="w-1/2 flex items-center justify-center pointer-events-auto">
-              {defenderData && <DefenderCard data={defenderData} onClose={() => setDefenderUnit(null)} />}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="w-1/2 flex items-center justify-center pointer-events-auto">
-              {defenderData && <DefenderCard data={defenderData} onClose={() => setDefenderUnit(null)} />}
-            </div>
-            <div className="w-1/2 flex items-center justify-center pointer-events-auto">
-              {attackerData && <AttackerCard data={attackerData} onClose={() => setAttackerUnit(null)} />}
-            </div>
-          </>
-        )}
-      </div>
+      {isMobile ? (
+        /* Mobile: attacker on top (~75%), defender below (~25%), full-width, role order fixed */
+        <div className="fixed inset-0 z-[60] flex flex-col py-12 px-3 gap-3 pointer-events-none">
+          <div className="flex-[3] min-h-0 w-full flex flex-col pointer-events-auto">
+            {attackerData && <AttackerCard data={attackerData} onClose={() => setAttackerUnit(null)} />}
+          </div>
+          <div className="flex-[1] min-h-0 w-full flex flex-col pointer-events-auto">
+            {defenderData && <DefenderCard data={defenderData} onClose={() => setDefenderUnit(null)} />}
+          </div>
+        </div>
+      ) : (
+        /* Tablet: side-by-side cards, left/right order determined by attackerIsLeft */
+        <div className="fixed inset-0 z-[60] flex items-center py-12 px-3 gap-3 pointer-events-none">
+          {attackerIsLeft ? (
+            <>
+              <div className="w-1/2 flex items-center justify-center pointer-events-auto">
+                {attackerData && <AttackerCard data={attackerData} onClose={() => setAttackerUnit(null)} />}
+              </div>
+              <div className="w-1/2 flex items-center justify-center pointer-events-auto">
+                {defenderData && <DefenderCard data={defenderData} onClose={() => setDefenderUnit(null)} />}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-1/2 flex items-center justify-center pointer-events-auto">
+                {defenderData && <DefenderCard data={defenderData} onClose={() => setDefenderUnit(null)} />}
+              </div>
+              <div className="w-1/2 flex items-center justify-center pointer-events-auto">
+                {attackerData && <AttackerCard data={attackerData} onClose={() => setAttackerUnit(null)} />}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </>
   );
 }
