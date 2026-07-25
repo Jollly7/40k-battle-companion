@@ -42,8 +42,10 @@ function recomputeWeaponQuantities(weapons, unitKey, casualties) {
   });
 }
 
-// Compact stat row for attacker card — all six stats, neutral styling
-function StatRow({ stats, sv }) {
+// Compact stat row for attacker card — all six stats, neutral styling.
+// Invuln renders as a second line inside the Sv cell (never inline) — "2+ (4++)"
+// is too wide for a one-sixth cell and wraps mid-token. Spacer keeps baselines level.
+function StatRow({ stats, sv, invuln }) {
   const items = [
     { label: 'M',  value: stats.M  },
     { label: 'T',  value: stats.T  },
@@ -57,7 +59,12 @@ function StatRow({ stats, sv }) {
       {items.map(({ label, value }) => (
         <div key={label} className="flex flex-col items-center rounded px-1 py-1.5 border border-border-subtle">
           <span className="text-[9px] text-text-muted uppercase tracking-wider">{label}</span>
-          <span className="text-lg font-bold tabular-nums text-text-primary">{value}</span>
+          <span className="text-lg font-bold tabular-nums text-text-primary leading-tight">{value}</span>
+          {invuln && (
+            <span className="h-3 text-[10px] font-semibold leading-3 tabular-nums text-amber-400">
+              {label === 'Sv' ? invuln : ''}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -72,7 +79,6 @@ function AttackerCard({ data, onClose }) {
   if (!unit) return null;
 
   const invuln = formatInvuln(unit.stats.invuln);
-  const sv = invuln ? `${unit.stats.SV} (${invuln})` : unit.stats.SV;
 
   const bgRanged  = recomputeWeaponQuantities(unit.ranged ?? [], bodyguardKey, casualties);
   const bgMelee   = recomputeWeaponQuantities(unit.melee ?? [], bodyguardKey, casualties);
@@ -104,7 +110,7 @@ function AttackerCard({ data, onClose }) {
             ✕
           </button>
         </div>
-        <StatRow stats={unit.stats} sv={sv} />
+        <StatRow stats={unit.stats} sv={unit.stats.SV} invuln={invuln} />
       </div>
 
       {/* Scrollable body — full content, weapons first */}

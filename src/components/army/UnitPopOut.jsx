@@ -204,7 +204,9 @@ export function CompositionAccordion({ composition, leaderComposition, leaderNam
   );
 }
 
-function BrowseStatBlock({ stats, sv }) {
+// Invuln renders as a second line inside the Sv cell (never inline) — "2+ (4++)"
+// is too wide for a one-sixth cell and wraps mid-token. Spacer keeps baselines level.
+function BrowseStatBlock({ stats, sv, invuln }) {
   const statItems = [
     { label: 'M',  value: stats.M  },
     { label: 'T',  value: stats.T  },
@@ -218,7 +220,12 @@ function BrowseStatBlock({ stats, sv }) {
       {statItems.map(({ label, value }) => (
         <div key={label} className="flex flex-col items-center rounded-lg px-1 py-2 border border-border-subtle">
           <span className="text-[9px] text-text-muted uppercase tracking-wider">{label}</span>
-          <span className="text-xl font-bold tabular-nums text-text-primary">{value}</span>
+          <span className="text-xl font-bold tabular-nums text-text-primary leading-tight">{value}</span>
+          {invuln && (
+            <span className="h-3.5 text-[11px] font-semibold leading-[0.875rem] tabular-nums text-amber-400">
+              {label === 'Sv' ? invuln : ''}
+            </span>
+          )}
         </div>
       ))}
     </div>
@@ -232,7 +239,6 @@ export function UnitPopOut({ unit, displayName, leader, rules, roleAccent, isDea
   const isMerged = !!leader;
   const { stats, ranged, melee, abilities, unitRules, keywords, composition } = unit;
   const invuln = formatInvuln(stats.invuln);
-  const sv = invuln ? `${stats.SV} (${invuln})` : stats.SV;
   const leaderInvuln = isMerged ? formatInvuln(leader.unit.stats.invuln) : null;
   const accentBorder = roleAccent === 'text-danger' ? 'border-danger' : 'border-success';
 
@@ -281,7 +287,7 @@ export function UnitPopOut({ unit, displayName, leader, rules, roleAccent, isDea
               </button>
             </div>
 
-            <BrowseStatBlock stats={stats} sv={sv} />
+            <BrowseStatBlock stats={stats} sv={stats.SV} invuln={invuln} />
 
             {isMerged && (
               <div className="flex items-center gap-2 text-xs mt-1 mb-1">
