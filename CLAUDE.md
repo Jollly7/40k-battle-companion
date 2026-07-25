@@ -65,6 +65,7 @@ src/
     reminders.js   # Phase reminder text, keyed by faction||detachment
   utils/
     parseRosterJson.js     # Transforms NewRecruit .json export into internal roster shape
+    normalizeDetachment.js # `normalizeDetachment` — coerces detachment (string[] | string | null) to string[]
     parseWahapediaCsv.js   # CSV parser + `sanitiseHtml` (plain-text strip, kept for legacy use)
     renderWahapediaHtml.js # `renderWahapediaHtml` — sanitises Wahapedia HTML for safe innerHTML use
     deduplicateByName.js   # Deduplication helper — retains only the highest-ID row per stratagem name
@@ -192,7 +193,7 @@ Read this section before touching any of these areas.
 
 ### Phase Reminders
 
-- **Reminders lookup**: `reminders.js` uses a hierarchical object — faction name as top-level key, detachment as nested key. `ArmyPanel.jsx` contains a `normalizeName` helper (lowercase + strip whitespace) used for leader/bodyguard fuzzy matching — this does **not** apply to phase reminder lookups, which use exact string keys.
+- **Reminders lookup**: `reminders.js` is **pure data, no logic** — a hierarchical object with faction name as top-level key, detachment as nested key. The lookups live in the two components that read it: `FactionsTab.getReminders` and `TrackerTab.PhaseReminders`, each via a local `resolveDetachmentReminders(faction, detachment)` helper that runs `normalizeDetachment` and takes the first name with data (v1.13.1). `ArmyPanel.jsx` contains a `normalizeName` helper (lowercase + strip whitespace) used for leader/bodyguard fuzzy matching — this does **not** apply to phase reminder lookups, which use exact string keys.
 - **`reminders.js`** structure: `general_reminders`, `faction_reminders`, `detachment_reminders`; `PhaseReminders` colocated in `TrackerTab.jsx`
 
 ### Roster Import
@@ -258,9 +259,10 @@ Three card states, all rendered as `fixed` overlays above all panels:
 ### Leader Attachment (v1.7.2)
 
 - A unit is a **leader** if it has `[Character]` keyword AND an ability with `typeName === "Abilities"` and `name === "Leader"`
-- Valid bodyguard names encoded between `^^` markers in the Leader ability description → extracted to `unit.leaderOf: string[]`
-- **Fuzzy matching**: a leader's `leaderOf` entry matches a roster unit if the unit name **contains** the bodyguard string (case-insensitive)
-- Attachment state: localStorage `wh40k-leader-attachments` — `{ [rosterLabel]: { [leaderUnitIndex]: bodyguardUnitIndex | null } }`
+- Valid bodyguard names are extracted from the Leader ability description into `unit.leaderOf: string[]`. **Two mutually exclusive formats** (v1.13.2) — caret markers (`^^Breacher Team^^`, used by Cadre Fireblade) take precedence; otherwise line-start bullets (`- NAME` / `■ Name`, used by T'au Commanders and GSC/Grey Knights). Both branches run the same `cleanName` helper, which strips `*` and `^`, because the bullet format also wraps names in markdown bold (`- **CRISIS STARSCYTHE BATTLESUITS**`). Do not let the two branches' cleaning diverge — that was the v1.13.2 bug.
+- **Fuzzy matching**: `ArmyPanel.normalizeName` lowercases and strips **all non-alphanumerics**, then compares for **strict equality** (not containment). This absorbs ALL CAPS, missing spaces, leftover markdown markers in rosters imported before v1.13.2, and smart vs straight apostrophes. Single call site — the `validBodyguards` filter in `ArmyPanel.jsx`.
+- **Failure mode to know**: if no `leaderOf` entry matches, `validBodyguards` is empty, `hasValidBodyguards` is false, and `UnitAccordion` renders **no "Attach ▾" button at all** — silently, with no error. A missing attach button always means a name-matching failure.
+- Attachment state: localStorage `wh40k-leader-attachments` — `{ p1: { [leaderUnitIndex]: bodyguardUnitIndex }, p2: {...} }`, keyed by **panel slot** (`pKey`), not roster label. Because the keys are bare unit indices, `ArmyPanel` needs its explicit label-change `useEffect` reset to stop stale indices leaking onto a newly selected roster.
 - When attached: leader and bodyguard accordions visually merge into a combined entry
 - Accent colour: amber (`amber-400` unattached / `amber-500` attached)
 
@@ -275,11 +277,13 @@ Three card states, all rendered as `fixed` overlays above all panels:
 
 ### Parser — `src/utils/parseRosterJson.js`
 
-Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units }`. No React, no I/O.
+Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, forceDisposition, units, rules }`. No React, no I/O.
 
 - Handles both NewRecruit array-style and older xml2js-wrapped formats
 - `roster.name` → `label`; `force.catalogueName` → `faction` (strips `"Xenos - "` etc. prefixes)
-- Detachment: top-level selection `name === "Detachment"` → first child name
+- **`detachment`** (v1.13.0) is **`string[]`**, not a string — every child name under the top-level `Detachment` selection, in document order. Rosters can legitimately declare more than one (confirmed: T'au `["Advanced Acquisition Cadre", "Kauyon"]`); the previous first-child-only read silently dropped the rest. No filtering by category, cost, or "primary" — the parser reports what the export contains and leaves interpretation to consumers. A roster with no `Detachment` selection yields `[]` (never throws, never `null`). Nameless/blank children are dropped defensively.
+- **`forceDisposition`** (v1.13.0): `string | null` — the name of the single child under a top-level `Force Disposition` selection (e.g. `"Priority Assets"`), else `null`. Present in 11th Ed exports, absent from 10th Ed ones. Note the value can coincide with a *category* name on a Detachment child; they are unrelated fields and are deliberately not correlated.
+- Top-level selections still **not** read by the parser: `Battle Size`, `Show/Hide Options`
 - Unit stats from `profiles` entry with `typeName === "Unit"`; T/W/OC coerced to int
 - Invuln: `Abilities` profile whose `name` matches `/^\d+\+\+$/`
 - Weapons: recursive walk of `selections`, collect by `typeName`, de-dupe by name, sum `count`
@@ -287,7 +291,32 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 - Multi-model fallback: if no Unit profile at top level, falls back to `collectProfiles(sel, 'Unit')[0]`
 - **`modelProfiles`** (v1.11): array of `{ id, name, count, stats, invuln, fnp }` — one entry per distinct model type (e.g. Beast Snagga Boy × 9, Beast Snagga Nob × 1); single-model units produce exactly one entry. `invuln` (v1.12) detected primarily from Abilities profile names matching `"Invulnerable Save (X+)"` → stored as `"5+"`; bare `^\d+\+\+$` kept as fallback. `fnp` detected from rule/ability names matching `/Feel No Pain (\d+\+)/i`. Both checked per-model then falling back to unit-level. Added by `getModelProfiles()`, `extractInvuln()`, `extractFnp()` helpers.
 - **`sources`** (v1.12): each weapon entry in `unit.ranged` / `unit.melee` now has `sources: [{ profileId, qty }]` where `profileId` matches `modelProfiles[].id` and `qty` = model count in that group. Built by `collectWeaponsWithSources()`. `count` = sum of source `qty` values. Used by `AttackerCard` to recompute remaining weapon quantities as models are killed. Legacy rosters (imported before v1.12) lack `sources` and display original quantities unchanged.
+- **Invuln display shape** (v1.13.3): the parser stores invuln in **two shapes** — `"4+"` (11th Ed `InSv` characteristic and the `"Invulnerable Save (4+)"` ability-name match) and `"4++"` (bare `^\d+\+\+$` ability-name fallback). This is deliberate: the parser reports what the export contains. **`src/utils/formatInvuln.js`** — `formatInvuln(value) → "4++" | null` — normalises both to standard `X++` notation **on read**, so rosters already in Cloudflare KV render correctly with no re-import (same principle as `normalizeDetachment` and `ArmyPanel.normalizeName`). Returns `null` for `"-"`, `null`, `""`, and non-strings, so callers gate on the helper's return, not on the raw field. Applied at all five display sites: `UnitAccordion` (`SV (X++)` collapsed row), `UnitPopOut` (browse stat block + merged-leader stats row), `CombatOverlay` (`AttackerCard` stat row + Defender table `InvSv` column). Do not format at parse time — that would strand every roster already synced to KV.
 - **NewRecruit data quirk — nested model nodes** (v1.12.2): most units export their model-type child nodes (`type: "model"`) as direct children of the unit selection. Some units (confirmed: Ork Squighog Boyz) nest them one level deeper inside an intermediate `type: "upgrade"` wrapper (e.g. `"1 Nob on Smasha Squig and 3 Squighog Boyz"`). `findUnitProfileAnchors` handles both depths transparently — do not revert to a non-recursive `getSelections(unitSel).filter(s => s.type === 'model')` scan in any of the four model-group callers.
+
+### Detachment Shape — `normalizeDetachment` (v1.13.1)
+
+`detachment` is **`string[]` everywhere** — parser output, store state, and every consumer. Mixed legacy shapes are normalised transparently **on read**; there is no KV migration and no re-import requirement.
+
+- **`src/utils/normalizeDetachment.js`** — `normalizeDetachment(value) → string[]`. Array → filtered copy (non-blank strings only, mirroring the parser's own filter); non-blank string → `[value]`; blank string / `null` / `undefined` / anything else → `[]`. **This is the only place shape detection lives** — never re-implement the check inline.
+- **Why legacy shapes persist**: rosters synced to Cloudflare KV (`all_rosters`) before v1.13.0 store `detachment` as a plain string; anything imported since stores an array. **Both shapes coexist in the same stored array.** `functions/api/rosters.js` is shape-agnostic (blind upsert by label) and needs no change.
+- **Three store choke points** normalise so downstream always sees an array: `fetchRosters` (both the KV-success and localStorage-fallback branches, via the module-level `normalizeRosters` helper), `setRosters` (optimistic local imports from `ArmyTab.handleImport` and `RosterPickerModal.handleFile`), and `selectRoster` (which copies into `players[n].detachment`).
+- Every display and lookup site **also** calls `normalizeDetachment` defensively — persisted Zustand state from an older session can still hold a string or `null` in `players[n].detachment`. `null` remains the store's empty sentinel; the helper maps it to `[]`.
+- **`[]` is truthy in JS** — this is what broke every display site in v1.13.0. Always gate on `.length`, never on raw truthiness, and always `.join(', ')` for display: React renders a string array as its elements concatenated **with no separator** (`"KauyonAdvanced Acquisition Cadre"`).
+- **First-match-wins matching**: where a single detachment must be resolved (Wahapedia rows, reminder keys), iterate the normalised names and take the first that resolves. No match behaves exactly as an unknown detachment did before.
+
+**Consumers (all 9 updated in v1.13.1):**
+
+| Site | Behaviour |
+|---|---|
+| `useArmyRuleData.js` | First normalised name matching a Wahapedia detachment row wins. `normName` (smart-quote/case) is now module-level and applied per candidate — `normalizeDetachment` handles shape only, never text. The `useMemo` dep is a **joined string** (`detachmentKey`), not the raw array, or a fresh array identity each render would defeat memoisation. |
+| `FactionsTab.jsx` (`resolveDetachmentReminders` → `getReminders`) | First name present in `DETACHMENT_REMINDERS[faction]` wins; `{}` otherwise. Keys stay **exact strings** — no fuzzy matching, so smart-quote variants still don't match (unchanged). |
+| `TrackerTab.jsx` (`resolveDetachmentReminders` → `PhaseReminders`) | Same first-match-wins resolution, colocated in `TrackerTab.jsx`. |
+| `RosterPickerModal.jsx` · `SetupScreen.jsx` | `faction — name, name`; segment omitted entirely when empty. |
+| `ArmyPanel.jsx` | Roster names win; falls back to the store player's when the roster declares none. Army Rule / Stratagems buttons gate on `.length`. Passes the array to the hook. |
+| `TrackerTab.jsx` name strip · `FactionsTab.jsx` header · `GameSummaryModal.jsx` | Joined for display (`·` / `,` separators); nothing rendered when empty — no bare separator, no empty element. |
+
+**`forceDisposition` display**: shown only at the three sites that read the roster object directly — `RosterPickerModal`, `SetupScreen`, `ArmyPanel` — as a smaller muted line beneath the faction/detachment line. The store's `players[n]` shape carries `faction` and `detachment` only, so `TrackerTab`, `FactionsTab`, and `GameSummaryModal` have no access to it; adding it would be a store-shape change and was deliberately not done.
 
 ### Wahapedia HTML Rendering
 
@@ -356,15 +385,27 @@ Pure transform: `parseRosterJson(json)` → `{ label, faction, detachment, units
 | v1.12.5 | **`rostersLoaded` persistence fix**: excluded `rostersLoaded` from Zustand `partialize`. Previously, rehydration set `rostersLoaded: true`, causing `SetupScreen`'s `useEffect` guard to block `fetchRosters()` forever — tablet always showed stale localStorage rosters. Principle: any boolean used as a fetch guard must not be persisted, or it permanently suppresses the fetch after the first session. | ✅ Done |
 | v1.12.6 | **HTTP cache fix for roster API**: `GET /api/rosters` now sets `Cache-Control: no-store`. Previously, Cloudflare Pages Functions returned no caching headers, so browsers applied heuristic caching — devices served stale roster lists after a new upload until the user cleared site data. Principle: Pages Functions set no `Cache-Control` by default; any dynamic API endpoint must explicitly set `no-store` or browsers may cache and serve stale responses. | ✅ Done |
 
+| v1.13.0 | **Multi-detachment parsing (parser only)**: `detachment` changes from `string` to **`string[]`** — every child under the top-level `Detachment` selection in document order, no filtering and no "primary" designation. Fixes rosters declaring two detachments (confirmed: T'au `["Advanced Acquisition Cadre", "Kauyon"]`) silently losing all but the first. New **`forceDisposition: string \| null`** field reads the single child of a top-level `Force Disposition` selection (11th Ed only). Missing `Detachment` selection yields `[]`, never throws. No other output shape changed — `modelProfiles`, `sources`, invuln/FNP extraction, `getStat()`, and `findUnitProfileAnchors()` untouched. Consumers updated in v1.13.1. | ✅ Done |
+| v1.13.1 | **Detachment consumers made array-aware**: new `src/utils/normalizeDetachment.js` (`string[] \| string \| null → string[]`) is the single home for shape detection. **9 sites fixed** — (1) `useArmyRuleData.js` crash (`.toLowerCase()` on an array): first-match-wins across candidates, `normName` hoisted to module scope, `useMemo` dep switched from the raw array to a joined `detachmentKey` string; (2) `FactionsTab.getReminders` and (3) `TrackerTab.PhaseReminders` reminder lookups, each via a local `resolveDetachmentReminders` first-match-wins helper (`reminders.js` itself is pure data and unchanged); (4) `RosterPickerModal.jsx`, (5) `ArmyPanel.jsx` (display, `.length` button gating, hook prop), (6) `GameSummaryModal.jsx`, (7) `SetupScreen.jsx`, (8) `TrackerTab.jsx` name strip (dangling `" · "`), (9) `FactionsTab.jsx` header (React concatenating array children with no separator) — all now gate on `.length` and `.join(', ')`. **Three store choke points** (`fetchRosters`, `setRosters`, `selectRoster`) normalise on read via the module-level `normalizeRosters` helper, so mixed legacy string/array records in Cloudflare KV work with no migration and no re-import. `forceDisposition` now rendered as a muted secondary line at the three roster-object sites (`RosterPickerModal`, `SetupScreen`, `ArmyPanel`). `functions/api/rosters.js` unchanged (shape-agnostic). | ✅ Done |
+| v1.13.2 | **Leader attach button missing for T'au Commanders**: the `leaderOf` bullet-format fallback in `parseRosterJson.js` did not strip markdown bold, so entries came out as `"**CRISIS STARSCYTHE BATTLESUITS**"` and never matched the roster's `"Crisis Starscythe Battlesuits"` — `validBodyguards` was empty and `UnitAccordion` rendered no "Attach ▾" button at all. The caret branch stripped `*`; the bullet branch did not. Both branches now share one `cleanName` helper (strips `*` and `^`). Separately, `ArmyPanel.normalizeName` widened from stripping whitespace to stripping all non-alphanumerics, so rosters **already** stored in Cloudflare KV / localStorage match without re-import (same normalise-on-read principle as `normalizeDetachment`) and smart vs straight apostrophes stop mattering. Affects every datasheet using the bullet format, not just T'au. | ✅ Done |
+
+| v1.13.3 | **Invuln saves displayed in `X++` notation**: new `src/utils/formatInvuln.js` normalises the parser's two stored shapes (`"4+"` from the 11th Ed `InSv` characteristic / `"Invulnerable Save (4+)"` ability match, and `"4++"` from the bare-name fallback) to standard 40k `X++` notation on read. Applied at all five display sites — `UnitAccordion` collapsed row, `UnitPopOut` browse stat block and merged-leader stats row, `CombatOverlay` `AttackerCard` stat row and Defender table `InvSv` column. Parser unchanged, so rosters already in Cloudflare KV need no re-import. Riptide Battlesuit now reads `2+ (4++)` instead of `2+ (4+)`. | ✅ Done |
+
 **Cross-cutting features shipped:** undo (20-snapshot stack), action log, mission card images + lightbox, localStorage persistence, secondary card draw/discard/lightbox.
 
 ---
 
 ## Current Progress
 
-**Last updated:** 24/06/2026
+**Last updated:** 25/07/2026
 
-**Status:** v1.12.6 complete. `GET /api/rosters` now returns `Cache-Control: no-store` — browsers will always fetch fresh roster data from the network rather than serving a heuristically-cached response.
+**Status:** v1.13.3 complete — invulnerable saves now display in standard `X++` notation everywhere. The parser was left alone deliberately: it stores `"4+"` for 11th Ed `InSv` / `"Invulnerable Save (4+)"` and `"4++"` for the bare-name fallback, and `formatInvuln()` collapses both on read, so no roster in Cloudflare KV needs re-importing. Verified against `1k Doubles(1).json` — Riptide Battlesuit parses `InSv "4+"` at both unit and model-profile level and now renders `2+ (4++)`. Helper edge cases checked (`"4++"`, `" 6+ "`, `"-"`, `null`, `""`, non-string → `null` where appropriate). `npm run lint` shows no new errors (20 pre-existing) and `npm run build` succeeds.
+
+**Previously:** v1.13.2 — leader attachment now works for datasheets whose Leader ability uses the markdown-bold bullet format (all T'au Commander variants; previously the "Attach ▾" button never appeared). Verified against `1k Doubles(1).json` (Commander in Enforcer Battlesuit → `Crisis Starscythe Battlesuits`) and `Tau 2k Kauyon AAC(2).json` (Farsight, Coldstar, Enforcer each offering the three Crisis units present); Cadre Fireblade's caret-format matching unchanged. Confirmed the widened `normalizeName` also matches the pre-fix `"**CRISIS STARSCYTHE BATTLESUITS**"` strings, so no re-import is needed. `npm run lint` shows no new errors (20 pre-existing) and `npm run build` succeeds.
+
+**Previously:** v1.13.1 — multi-detachment support is shippable end to end. `detachment` is `string[]` from parser through store to every consumer, with legacy string/`null` records normalised transparently on read by `normalizeDetachment()`. `forceDisposition` renders at the three roster-object display sites.
+
+Verified by rendering the real components (Vite SSR + `renderToStaticMarkup`) against three scenarios: `Tau 2k Kauyon AAC(2).json` (`["Advanced Acquisition Cadre", "Kauyon"]` + `"Priority Assets"`), `1 Million Bullets.json` (`["Mont'ka"]`, no disposition), and a hand-built legacy roster with `detachment` as a plain string. No crash in the Army Rule / Stratagems modals, no dangling separators, no unseparated concatenation, no `null`/`undefined` leaking into markup, and reminder lookups resolve for all three shapes. `npm run lint` shows no new errors (20 pre-existing) and `npm run build` succeeds.
 
 ---
 

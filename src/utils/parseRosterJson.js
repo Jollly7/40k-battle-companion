@@ -518,14 +518,18 @@ function parseUnit(sel) {
   let leaderOf = [];
   if (leaderAbility) {
     const desc = leaderAbility.description;
+    // Strip markdown emphasis and caret markers from an extracted bodyguard name.
+    // Both branches must clean identically — the bullet format wraps names in ** too
+    // (e.g. "- **CRISIS STARSCYTHE BATTLESUITS**" on T'au Commander datasheets).
+    const cleanName = s => s.replace(/[*^]/g, '').trim();
     const caretMatches = [...desc.matchAll(/\^\^(.*?)\^\^/g)];
     if (caretMatches.length > 0) {
-      const names = caretMatches.map(m => m[1].replace(/\*/g, '').trim()).filter(Boolean);
+      const names = caretMatches.map(m => cleanName(m[1])).filter(Boolean);
       leaderOf = [...new Set(names)].sort();
     } else {
       // Fall back to line-start bullet formats: ■ Name  or  - Name
       const lineMatches = [...desc.matchAll(/^[■\-]\s+(.+)$/gm)];
-      const names = lineMatches.map(m => m[1].trim()).filter(Boolean);
+      const names = lineMatches.map(m => cleanName(m[1])).filter(Boolean);
       leaderOf = [...new Set(names)].sort();
     }
   }
@@ -536,7 +540,8 @@ function parseUnit(sel) {
 /**
  * Parse a NewRecruit JSON export into the internal roster shape.
  * @param {object} json - Parsed JSON from a .json NewRecruit export
- * @returns {{ label, faction, detachment, units }}
+ * @returns {{ label: string, faction: string, detachment: string[],
+ *             forceDisposition: string|null, units: object[], rules: object }}
  */
 export function parseRosterJson(json) {
   const roster = json?.roster;
@@ -558,11 +563,27 @@ export function parseRosterJson(json) {
   const rawFaction = force.catalogueName ?? '';
   const faction = rawFaction.replace(/^(Xenos|Imperium|Chaos|Unaligned)\s*-\s*/i, '').trim();
 
-  // Detachment: find top-level selection named "Detachment", read its first child's name
   const topSelections = getSelections(force);
+
+  // Detachment (v1.13.0): array of EVERY child name under the top-level "Detachment"
+  // selection, in document order. Rosters may declare more than one (e.g. T'au
+  // "Advanced Acquisition Cadre" + "Kauyon"); the previous [0]-only read silently
+  // dropped all but the first. No filtering by category, cost, or "primary" — the
+  // parser reports what the export contains and leaves interpretation downstream.
+  // Missing "Detachment" selection yields [] rather than throwing.
   const detachmentSel = topSelections.find(s => s.name === 'Detachment');
   const detachment = detachmentSel
-    ? (getSelections(detachmentSel)[0]?.name ?? null)
+    ? getSelections(detachmentSel)
+        .map(s => s.name)
+        .filter(n => typeof n === 'string' && n.trim() !== '')
+    : [];
+
+  // Force Disposition (v1.13.0): name of the single child under a top-level
+  // "Force Disposition" selection (e.g. "Priority Assets"), or null when absent.
+  // Not present in 10th Edition exports.
+  const forceDispositionSel = topSelections.find(s => s.name === 'Force Disposition');
+  const forceDisposition = forceDispositionSel
+    ? (getSelections(forceDispositionSel)[0]?.name ?? null)
     : null;
 
   // Units: top-level selections of type "model" or "unit"
@@ -573,5 +594,5 @@ export function parseRosterJson(json) {
 
   const rules = collectRules(json);
 
-  return { label, faction, detachment, units, rules };
+  return { label, faction, detachment, forceDisposition, units, rules };
 }

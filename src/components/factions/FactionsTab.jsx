@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { GENERAL_REMINDERS, FACTION_REMINDERS, DETACHMENT_REMINDERS } from '../../data/reminders';
+import { normalizeDetachment } from '../../utils/normalizeDetachment';
 
 const PHASE_NAMES = ['command', 'movement', 'shooting', 'charge', 'fight'];
 const PHASE_LABELS = {
@@ -12,12 +13,26 @@ const PHASE_LABELS = {
   fight:    'Fight Phase',
 };
 
+/**
+ * First declared detachment with reminder data wins; `{}` when none match.
+ * `detachment` may be a string[] (v1.13.0+), a legacy string, or null.
+ */
+function resolveDetachmentReminders(faction, detachment) {
+  const byDetachment = DETACHMENT_REMINDERS[faction];
+  if (!byDetachment) return {};
+  for (const name of normalizeDetachment(detachment)) {
+    if (byDetachment[name]) return byDetachment[name];
+  }
+  return {};
+}
+
 function getReminders(faction, detachment) {
+  const detachmentReminders = resolveDetachmentReminders(faction, detachment);
   const merged = {};
   for (const phase of PHASE_NAMES) {
     const groups = [
       { label: 'Faction',    items: FACTION_REMINDERS[faction]?.[phase] ?? [] },
-      { label: 'Detachment', items: DETACHMENT_REMINDERS[faction]?.[detachment]?.[phase] ?? [] },
+      { label: 'Detachment', items: detachmentReminders[phase] ?? [] },
       { label: 'General',    items: GENERAL_REMINDERS[phase] ?? [] },
     ].filter((g) => g.items.length > 0);
     if (groups.length) merged[phase] = groups;
@@ -32,6 +47,7 @@ function FactionColumn({ playerNum, isAttacker, isLeft }) {
 
   const reminders = getReminders(player.faction, player.detachment);
   const hasReminders = Object.keys(reminders).length > 0;
+  const detachmentNames = normalizeDetachment(player.detachment);
 
   return (
     <div className={`flex-1 flex flex-col overflow-hidden bg-surface-base ${divider}`}>
@@ -39,8 +55,8 @@ function FactionColumn({ playerNum, isAttacker, isLeft }) {
       <div className="px-5 py-3 border-b border-border-subtle bg-surface-panel shrink-0">
         <div className={`font-display text-base font-bold ${accentText}`}>{player.name}</div>
         <div className="text-sm text-text-secondary mt-0.5">{player.faction ?? '—'}</div>
-        {player.detachment && (
-          <div className="text-xs text-text-muted mt-0.5">{player.detachment}</div>
+        {detachmentNames.length > 0 && (
+          <div className="text-xs text-text-muted mt-0.5">{detachmentNames.join(', ')}</div>
         )}
       </div>
 

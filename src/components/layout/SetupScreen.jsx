@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { RosterPickerModal } from '../army/RosterPickerModal';
+import { normalizeDetachment } from '../../utils/normalizeDetachment';
 
 function PlayerSetupColumn({ playerNum, accentBorderClass }) {
   const name               = useGameStore((s) => s.players[playerNum].name);
@@ -15,6 +16,7 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const selectedRoster = rosters.find((r) => r.label === rosterLabel) ?? null;
+  const detachmentNames = normalizeDetachment(selectedRoster?.detachment);
 
   function handleSelect(roster) {
     selectRoster(playerNum, roster);
@@ -55,7 +57,12 @@ function PlayerSetupColumn({ playerNum, accentBorderClass }) {
         </button>
         {selectedRoster && (
           <span className="text-xs text-text-muted px-1">
-            {selectedRoster.faction ?? '—'}{selectedRoster.detachment ? ` — ${selectedRoster.detachment}` : ''}
+            {selectedRoster.faction ?? '—'}{detachmentNames.length > 0 ? ` — ${detachmentNames.join(', ')}` : ''}
+          </span>
+        )}
+        {selectedRoster?.forceDisposition && (
+          <span className="text-[10px] text-text-muted opacity-75 px-1">
+            {selectedRoster.forceDisposition}
           </span>
         )}
       </div>

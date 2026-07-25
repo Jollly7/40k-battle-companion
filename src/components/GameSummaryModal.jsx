@@ -1,4 +1,5 @@
 import { useGameStore } from '../store/gameStore';
+import { normalizeDetachment } from '../utils/normalizeDetachment';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -55,6 +56,9 @@ export function GameSummaryModal({ firstPlayerNum, secondPlayerNum, onClose }) {
   const leftColor  = roleColor(left);
   const rightColor = roleColor(right);
 
+  const leftDetachments  = normalizeDetachment(left.detachment);
+  const rightDetachments = normalizeDetachment(right.detachment);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div
@@ -76,7 +80,9 @@ export function GameSummaryModal({ firstPlayerNum, secondPlayerNum, onClose }) {
             </div>
             <div className="text-xs text-text-secondary truncate">
               {left.faction ?? '—'}
-              {left.detachment ? <span className="text-text-muted"> · {left.detachment}</span> : null}
+              {leftDetachments.length > 0
+                ? <span className="text-text-muted"> · {leftDetachments.join(', ')}</span>
+                : null}
             </div>
           </div>
 
@@ -108,7 +114,9 @@ export function GameSummaryModal({ firstPlayerNum, secondPlayerNum, onClose }) {
             </div>
             <div className="text-xs text-text-secondary truncate text-right">
               {right.faction ?? '—'}
-              {right.detachment ? <span className="text-text-muted"> · {right.detachment}</span> : null}
+              {rightDetachments.length > 0
+                ? <span className="text-text-muted"> · {rightDetachments.join(', ')}</span>
+                : null}
             </div>
           </div>
 

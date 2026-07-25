@@ -3,6 +3,7 @@ import { Lock, X } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 import { SECONDARY_MISSION_IMAGES } from '../../data/missionImages';
 import { GENERAL_REMINDERS, FACTION_REMINDERS, DETACHMENT_REMINDERS } from '../../data/reminders';
+import { normalizeDetachment } from '../../utils/normalizeDetachment';
 
 const PHASE_KEYS = ['command', 'movement', 'shooting', 'charge', 'fight'];
 
@@ -343,6 +344,7 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
   const accent      = ROLE_ACCENT[isAttacker ? 'attacker' : 'defender'];
   const showControls        = isActive || isExpanded;
   const isCollapsedInactive = !isActive && !isExpanded;
+  const detachmentNames     = normalizeDetachment(player.detachment);
 
   const [drawModal, setDrawModal] = useState(null); // null | { slot: 0|1 }
 
@@ -381,9 +383,9 @@ function PlayerTrackerPanel({ playerNum, isAttacker, isActive, isExpanded, isShr
             <span className="font-display text-lg font-semibold truncate">{player.name}</span>
             {isActive && <span className="text-xs font-normal opacity-60 shrink-0">active</span>}
           </div>
-          {(player.faction || player.detachment) && (
+          {(player.faction || detachmentNames.length > 0) && (
             <div className="text-xs text-text-muted mt-0.5 truncate">
-              {[player.faction, player.detachment].filter(Boolean).join(' · ')}
+              {[player.faction, detachmentNames.join(', ')].filter(Boolean).join(' · ')}
             </div>
           )}
         </div>
@@ -522,12 +524,26 @@ function ReminderList({ items }) {
   );
 }
 
+/**
+ * First declared detachment with reminder data wins; `{}` when none match.
+ * `detachment` may be a string[] (v1.13.0+), a legacy string, or null.
+ */
+function resolveDetachmentReminders(faction, detachment) {
+  const byDetachment = DETACHMENT_REMINDERS[faction];
+  if (!byDetachment) return {};
+  for (const name of normalizeDetachment(detachment)) {
+    if (byDetachment[name]) return byDetachment[name];
+  }
+  return {};
+}
+
 function PhaseReminders({ faction, detachment, phaseIndex }) {
   const phaseKey = PHASE_KEYS[phaseIndex];
+  const detachmentReminders = resolveDetachmentReminders(faction, detachment);
 
   const groups = [
     { label: 'Faction',    items: FACTION_REMINDERS[faction]?.[phaseKey] ?? [] },
-    { label: 'Detachment', items: DETACHMENT_REMINDERS[faction]?.[detachment]?.[phaseKey] ?? [] },
+    { label: 'Detachment', items: detachmentReminders[phaseKey] ?? [] },
     { label: 'General',    items: GENERAL_REMINDERS[phaseKey] ?? [] },
   ].filter((g) => g.items.length > 0);
 

@@ -2,6 +2,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SECONDARY_MISSIONS } from '../data/missions';
 import { PHASES } from '../data/phases';
+import { normalizeDetachment } from '../utils/normalizeDetachment';
+
+// Rosters arrive from three places — Cloudflare KV, the localStorage fallback,
+// and optimistic local imports — and KV holds a mix of pre-v1.13.0 records
+// (`detachment` as a string) and current ones (`string[]`). Normalising here
+// means every downstream read sees an array without a KV migration or re-import.
+function normalizeRosters(rosters) {
+  if (!Array.isArray(rosters)) return [];
+  return rosters.map((r) => (
+    r && typeof r === 'object'
+      ? { ...r, detachment: normalizeDetachment(r.detachment) }
+      : r
+  ));
+}
 
 function shuffle(arr) {
   const a = [...arr];
@@ -151,23 +165,28 @@ export const useGameStore = create(
       const res = await fetch('/api/rosters');
       if (!res.ok) throw new Error('non-200');
       const { rosters: kvRosters } = await res.json();
-      localStorage.setItem('wh40k-imported-rosters', JSON.stringify(kvRosters));
-      set({ rosters: kvRosters, rostersLoaded: true });
+      const normalized = normalizeRosters(kvRosters);
+      localStorage.setItem('wh40k-imported-rosters', JSON.stringify(normalized));
+      set({ rosters: normalized, rostersLoaded: true });
     } catch {
       const fallback = (() => {
         try { return JSON.parse(localStorage.getItem('wh40k-imported-rosters') ?? '[]'); } catch { return []; }
       })();
-      set({ rosters: fallback, rostersLoaded: true });
+      set({ rosters: normalizeRosters(fallback), rostersLoaded: true });
     }
   },
 
-  setRosters: (rosters) => set({ rosters }),
+  setRosters: (rosters) => set({ rosters: normalizeRosters(rosters) }),
 
   selectRoster: (player, roster) => set((s) => ({
     ...(player === 1 ? { player1RosterLabel: roster.label } : { player2RosterLabel: roster.label }),
     players: {
       ...s.players,
-      [player]: { ...s.players[player], faction: roster.faction, detachment: roster.detachment },
+      [player]: {
+        ...s.players[player],
+        faction: roster.faction,
+        detachment: normalizeDetachment(roster.detachment),
+      },
     },
   })),
 

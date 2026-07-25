@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { WeaponTable, AbilitiesSection, AbilityPopup, CompositionAccordion } from './UnitPopOut';
+import { formatInvuln } from '../../utils/formatInvuln';
 
 // Resolve unit and leader data from the rosters array given a stored combat unit payload.
 function resolveUnit(rosters, payload) {
@@ -70,7 +71,8 @@ function AttackerCard({ data, onClose }) {
   const { unit, leader, rules, displayName, leaderDisplayName, bodyguardKey, leaderKey } = data;
   if (!unit) return null;
 
-  const sv = unit.stats.invuln ? `${unit.stats.SV} (${unit.stats.invuln})` : unit.stats.SV;
+  const invuln = formatInvuln(unit.stats.invuln);
+  const sv = invuln ? `${unit.stats.SV} (${invuln})` : unit.stats.SV;
 
   const bgRanged  = recomputeWeaponQuantities(unit.ranged ?? [], bodyguardKey, casualties);
   const bgMelee   = recomputeWeaponQuantities(unit.melee ?? [], bodyguardKey, casualties);
@@ -219,8 +221,8 @@ function DefenderCard({ data, onClose }) {
                   <td className="py-1 px-0.5 text-center text-text-secondary tabular-nums">{row.stats.LD}</td>
                   <td className="py-1 px-0.5 text-center text-text-secondary tabular-nums">{row.stats.OC}</td>
                   <td className="py-1 px-0.5 text-center tabular-nums">
-                    {row.invuln
-                      ? <span className="text-amber-400 font-semibold">{row.invuln}</span>
+                    {formatInvuln(row.invuln)
+                      ? <span className="text-amber-400 font-semibold">{formatInvuln(row.invuln)}</span>
                       : <span className="text-text-muted">–</span>}
                   </td>
                   <td className="py-1 px-0.5 text-center tabular-nums">

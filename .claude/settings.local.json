@@ -6,8 +6,12 @@
       "Bash(node *)",
       "Bash(git *)",
       "Bash(vite *)",
-      "Bash(node -e \":*)",
-      "Bash(python3:*)"
+      "Bash(node -e *)",
+      "Bash(python3:*)",
+      "Bash(npm run *)",
+      "Bash(node scripts/smoke-v1131.mjs*)",
+      "Bash(node -e ' *)",
+      "Read(//d/Edmund/Documents/Edmund/GoogleDriveSync/Coding Things/warhammer-battle-tracker-v2/**)"
     ]
   }
 }

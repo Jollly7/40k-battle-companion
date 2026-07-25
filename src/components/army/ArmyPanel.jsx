@@ -4,10 +4,16 @@ import { UnitAccordion } from './UnitAccordion';
 import { UnitPopOut } from './UnitPopOut';
 import { StratagemsModal } from './StratagemsModal';
 import { ArmyRuleModal } from './ArmyRuleModal';
+import { normalizeDetachment } from '../../utils/normalizeDetachment';
 
-/** Normalise for fuzzy matching: lowercase + strip all whitespace. Handles ALL CAPS and missing spaces (e.g. "HANDFLAMERS" vs "Hand Flamers"). */
+/**
+ * Normalise for fuzzy matching: lowercase + strip everything except letters/digits.
+ * Handles ALL CAPS, missing spaces (e.g. "HANDFLAMERS" vs "Hand Flamers"), markdown
+ * markers left in rosters imported before the parser stripped them
+ * ("**CRISIS STARSCYTHE BATTLESUITS**"), and smart vs straight apostrophes.
+ */
 function normalizeName(s) {
-  return s.toLowerCase().replace(/\s+/g, '');
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, pKey, attachments, setAttachments, elevated, pendingRole, chipData }) {
@@ -27,7 +33,13 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
   });
 
   const faction = armyData?.faction ?? null;
-  const detachment = armyData?.detachment ?? storeDetachment ?? null;
+  // Roster names win; fall back to the store player's when the roster declares
+  // none. Both may be a string[] (v1.13.0+), a legacy string, or null.
+  const rosterDetachments = normalizeDetachment(armyData?.detachment);
+  const detachmentNames = rosterDetachments.length > 0
+    ? rosterDetachments
+    : normalizeDetachment(storeDetachment);
+  const forceDisposition = armyData?.forceDisposition ?? null;
   const rules = armyData?.rules ?? {};
 
   const [deadUnits, setDeadUnits] = useState(() => {
@@ -249,12 +261,15 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
           )}
           {importButton}
         </div>
-        {(faction || detachment) && (
+        {(faction || detachmentNames.length > 0) && (
           <div className="text-sm text-text-secondary mt-0.5">
-            {faction ?? '—'}{detachment ? ` — ${detachment}` : ''}
+            {faction ?? '—'}{detachmentNames.length > 0 ? ` — ${detachmentNames.join(', ')}` : ''}
           </div>
         )}
-        {(faction || detachment) && (
+        {forceDisposition && (
+          <div className="text-xs text-text-muted mt-0.5">{forceDisposition}</div>
+        )}
+        {(faction || detachmentNames.length > 0) && (
           <div className="flex gap-2 mt-2">
             <button
               onClick={() => setArmyRuleOpen(true)}
@@ -327,13 +342,13 @@ export function ArmyPanel({ armyData, accentClass, label, isLeft, importButton, 
         isOpen={stratagemsOpen}
         onClose={() => setStratagemsOpen(false)}
         factionName={faction}
-        detachmentName={detachment}
+        detachmentName={detachmentNames}
       />
       <ArmyRuleModal
         isOpen={armyRuleOpen}
         onClose={() => setArmyRuleOpen(false)}
         factionName={faction}
-        detachmentName={detachment}
+        detachmentName={detachmentNames}
       />
 
       {chipData && <div className="absolute inset-0 bg-black/75 backdrop-blur-sm z-10" />}

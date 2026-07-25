@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { formatInvuln } from '../../utils/formatInvuln';
 
 function lookupKeyword(token, rules) {
   if (!rules) return null;
@@ -230,7 +231,9 @@ export function UnitPopOut({ unit, displayName, leader, rules, roleAccent, isDea
 
   const isMerged = !!leader;
   const { stats, ranged, melee, abilities, unitRules, keywords, composition } = unit;
-  const sv = stats.invuln ? `${stats.SV} (${stats.invuln})` : stats.SV;
+  const invuln = formatInvuln(stats.invuln);
+  const sv = invuln ? `${stats.SV} (${invuln})` : stats.SV;
+  const leaderInvuln = isMerged ? formatInvuln(leader.unit.stats.invuln) : null;
   const accentBorder = roleAccent === 'text-danger' ? 'border-danger' : 'border-success';
 
   const combinedRanged = isMerged
@@ -287,8 +290,8 @@ export function UnitPopOut({ unit, displayName, leader, rules, roleAccent, isDea
                   <span>{leader.unit.stats.M}</span>
                   <span>T{leader.unit.stats.T}</span>
                   <span>
-                    {leader.unit.stats.invuln
-                      ? `${leader.unit.stats.SV} (${leader.unit.stats.invuln})`
+                    {leaderInvuln
+                      ? `${leader.unit.stats.SV} (${leaderInvuln})`
                       : leader.unit.stats.SV}
                   </span>
                   <span>W{leader.unit.stats.W}</span>

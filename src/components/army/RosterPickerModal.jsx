@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { parseRosterJson } from '../../utils/parseRosterJson';
+import { normalizeDetachment } from '../../utils/normalizeDetachment';
 
 const LS_ROSTERS_KEY = 'wh40k-imported-rosters';
 
@@ -94,6 +95,7 @@ export function RosterPickerModal({ open, onClose, onSelect, rosters, selectedLa
             <ul className="divide-y divide-border-subtle">
               {rosters.map((roster) => {
                 const isSelected = roster.label === selectedLabel;
+                const detachmentNames = normalizeDetachment(roster.detachment);
                 return (
                   <li key={roster.label}>
                     <button
@@ -108,8 +110,13 @@ export function RosterPickerModal({ open, onClose, onSelect, rosters, selectedLa
                         {roster.label}
                       </span>
                       <span className="text-xs text-text-muted">
-                        {roster.faction ?? '—'}{roster.detachment ? ` — ${roster.detachment}` : ''}
+                        {roster.faction ?? '—'}{detachmentNames.length > 0 ? ` — ${detachmentNames.join(', ')}` : ''}
                       </span>
+                      {roster.forceDisposition && (
+                        <span className="text-[10px] text-text-muted opacity-75">
+                          {roster.forceDisposition}
+                        </span>
+                      )}
                     </button>
                   </li>
                 );

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, X } from 'lucide-react';
+import { formatInvuln } from '../../utils/formatInvuln';
 
 export function UnitAccordion({ unit, displayName, leader, isCharacter, validBodyguards, onAttach, isDead, onSelect, onToggleDead }) {
   const [showAttachMenu, setShowAttachMenu] = useState(false);
@@ -7,7 +8,8 @@ export function UnitAccordion({ unit, displayName, leader, isCharacter, validBod
   const isMerged = !!leader;
   const effectiveName = displayName ?? unit.name;
   const { stats, composition } = unit;
-  const sv = stats.invuln ? `${stats.SV} (${stats.invuln})` : stats.SV;
+  const invuln = formatInvuln(stats.invuln);
+  const sv = invuln ? `${stats.SV} (${invuln})` : stats.SV;
   const totalModels = composition ? composition.reduce((sum, m) => sum + m.count, 0) : null;
   const displayPts = isMerged
     ? (unit.pts ?? 0) + (leader.unit.pts ?? 0)

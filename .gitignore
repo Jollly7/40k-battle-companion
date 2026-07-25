@@ -23,8 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 *.ros
-1k (2).json 
-1k Doubles.json
+1 Million Bullets.json
+1k Doubles(1).json
+Tau 2k Kauyon AAC(2).json
 
 # archive files
 archive_*.md
